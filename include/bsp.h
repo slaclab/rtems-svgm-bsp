@@ -18,15 +18,12 @@
 #include <bsp/vectors.h>
 
 #include <libcpu/io.h>
-/* these should not be defined in libcpu/io.h! */
-#warning "TODO: fix _IO_BASE & friends hack..."
-/* change definitions for CHRP / SVGM */
-#undef	_IO_BASE
-#define _IO_BASE 0xfe000000
-#undef	_ISA_MEM_BASE
-#define _ISA_MEM_BASE 0
-#undef	PCI_DRAM_OFFSET
-#define PCI_DRAM_OFFSET 0	/* start of our ram seen from the PCI bus */
+
+/* fundamental addresses for this BSP (PREPxxx are from libcpu/io.h) */
+#define _IO_BASE			CHRP_ISA_IO_BASE
+#define	_ISA_MEM_BASE		CHRP_ISA_MEM_BASE
+/* start of our ram seen from the PCI bus */
+#define PCI_DRAM_OFFSET		CHRP_PCI_DRAM_OFFSET
 
 /*
  *  confdefs.h overrides for this BSP:

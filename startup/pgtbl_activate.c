@@ -1,7 +1,7 @@
 /* $Id$ */
 
 #include <rtems.h>
-#include "pte121.h"
+#include <libcpu/pte121.h>
 
 /* Default activation of the page tables. This is a weak
  * alias, so applications may easily override this

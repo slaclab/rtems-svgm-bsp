@@ -36,12 +36,12 @@
 #include <bsp/irq.h>
 #include <libcpu/bat.h>
 #include <libcpu/page.h>
+#include <libcpu/pte121.h>
 
 #include <bsp/vectors.h>
 #include <bsp/VME.h>
 #include <bsp/bspVGM.h>
 #include <synergyregs.h>
-#include "pte121.h"
 
 /* for RTEMS_VERSION :-( I dont like the preassembled string */
 #include <rtems/sptables.h>

@@ -159,9 +159,8 @@ MODULE_PARM(gx_fix, "i");
 #include <bsp/irq.h>
 #include <libcpu/byteorder.h>			/* st_le32 & friends */
 #include <libcpu/io.h>					/* inp & friends */
-/* TODO: fix this ugly hack */
-#include <bsp.h> /* give bsp.h a chance to fix _IO_BASE, PCI_DRAM_OFFSET */
-#warning "YELLOWFIN: should fix _IO_BASE hack"
+#include <bsp.h>
+
 /* our memory address seen from the PCI bus */
 #define virt_to_bus(addr)	((addr)+PCI_DRAM_OFFSET)	/* on CHRP :-) */
 /* and back... */

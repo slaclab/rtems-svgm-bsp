@@ -4,7 +4,7 @@
 #include <libcpu/mmu.h>
 #include <libcpu/page.h>
 #include <rtems/bspIo.h>
-#include "pte121.h"
+#include <libcpu/pte121.h>
 
 
 /* Default setup of the page tables. This is a weak
