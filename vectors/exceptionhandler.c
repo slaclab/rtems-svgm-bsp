@@ -19,8 +19,6 @@
 void
 BSP_printStackTrace();
 
-unsigned long
-_BSP_clear_hostbridge_errors();
 
 void
 rtemsReboot(void);

@@ -58,9 +58,6 @@
 void
 _BSP_pciCacheInit();
 
-unsigned long
-_BSP_clear_hostbridge_errors();
-
 rtems_unsigned32
 _bsp_sbrk_init(rtems_unsigned32 heap_start, rtems_unsigned32 *heap_size_p);
 

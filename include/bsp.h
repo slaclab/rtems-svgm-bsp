@@ -96,6 +96,29 @@ extern void rtemsReboot(void);
 extern int BSP_disconnect_clock_handler (void);
 extern int BSP_connect_clock_handler (void);
 
+/* clear hostbridge errors
+ *
+ * clear all error flags adhering to the algorithm
+ * recommended by motorola - MPC106 user's manual
+ * sect. 9.3.3.3
+ *
+ * enableMCP: whether to enable MCP checkstop / machine check interrupts
+ *            on the hostbridge and in HID0.
+ *
+ *            NOTE: HID0 and MEREN are left alone if this flag is 0
+ * 
+ * quiet    : be silent
+ *
+ * Returns: (for diagnostic purposes)
+ *          original settings (i.e. before applying the clearing
+ *          sequence) of
+ *          (errdr2<<24) | (errdr1<<16) | pci_status
+ */
+
+extern unsigned long _BSP_clear_hostbridge_errors(int enableMCP, int quiet);
+
+
+
 extern char *BSP_build_date;
 
 /* this is misleading, it's actually the first interface's name */
