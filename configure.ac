@@ -9,7 +9,7 @@ RTEMS_TOP(../../../../../..)
 AC_CONFIG_AUX_DIR(../../../../../..)
 
 RTEMS_CANONICAL_TARGET_CPU
-AM_INIT_AUTOMAKE(rtems-c-src-lib-libbsp-powerpc-svgm5,$RTEMS_VERSION,no)
+AM_INIT_AUTOMAKE(rtems-c-src-lib-libbsp-powerpc-svgm,$RTEMS_VERSION,no)
 RTEMS_BSP_CONFIGURE
 
 RTEMS_PROG_CC_FOR_TARGET([-ansi -fasm])
@@ -43,6 +43,7 @@ pci/Makefile
 start/Makefile
 startup/Makefile
 vectors/Makefile
+synergy/Makefile
 wrapup/Makefile])
 
 RTEMS_PPC_EXCEPTIONS([new])
