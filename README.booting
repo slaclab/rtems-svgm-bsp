@@ -22,32 +22,12 @@ command line. They may be written to a script for
 convenience.
 
     SMon0> load "rtems_app_image" 
+    SMon0> netStop  /* make sure network DMA is stopped */
     SMon0> go r5
 
-Notes on BSP BAT usage
-----------------------
-The BSP exclusively uses BATs for address translations.
-No page tables are implemented. This imposes restrictions
-on the usable virtual address space. Essentially, 2 DBATS
-and 1 IBAT are needed by the BSP, leaving the remaining
-for application usage. A simple 1:1 (virt<->phys) mapping
-is employed.
+It is recommended to use the 'netboot' application (a
+RTEMS application residing in flash rom capable of
+net-booting other / 'real' RTEMS applications).
+Contact me for more information about 'netboot'.
 
-DBAT0 and IBAT0
-0x00000000
-0x0fffffff  1st 256M, for MEMORY access (caching enabled)
 
-DBAT1
-0xf0000000
-0xffffffff  last 256M for IO access (no caching, guarded)
-
-Note that the DBAT1 setup must match the host bridge
-configuration. The BSP does _not_ currently change
-the latter but relies on SMON configuring it. This
-seems to work well for the default configuration.
-
-UPDATE: (2003/1).
-The BSP now uses page tables for mapping the entire
-RAM. DBAT0 is hence free for use by the application.
-The BSP write-protects the text and read-only data
-areas of the application.

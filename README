@@ -45,3 +45,56 @@ Notes
 
 Based on powerpc/shared bsp (which makes a couple of unlucky
 assumptions about the presence of an ISA bus)
+
+BSP BAT usage
+----------------------
+The BSP exclusively uses BATs for address translations.
+No page tables are implemented. This imposes restrictions
+on the usable virtual address space. Essentially, 2 DBATS
+and 1 IBAT are needed by the BSP, leaving the remaining
+for application usage. A simple 1:1 (virt<->phys) mapping
+is employed.
+
+DBAT0 and IBAT0
+0x00000000
+0x0fffffff  1st 256M, for MEMORY access (caching enabled)
+
+DBAT1
+0xf0000000
+0xffffffff  last 256M for IO access (no caching, guarded)
+
+Note that the DBAT1 setup must match the host bridge
+configuration. The BSP does _not_ currently change
+the latter but relies on SMON configuring it. This
+seems to work well for the default configuration.
+
+UPDATE: (2003/1).
+The BSP now uses page tables for mapping the entire
+RAM. DBAT0 is hence free for use by the application.
+The BSP write-protects the text and read-only data
+areas of the application.
+
+The default VME configuration uses DBAT0 to map
+more PCI memory space for use by the universe VME
+bridge:
+
+DBAT0
+0xc0000000	PCI memory space <-> VME
+0xcfffffff
+
+0xc0000000..0xceffffff  VME A32
+0xcf000000..0xcffeffff  VME A24
+0xcfff0000..0xcfffffff	VME A16
+
+MAILBOX
+-------
+By default, all memory is mapped with caching enabled
+and the text area is write-protected. Both settings
+make it impossible to write to the mailbox which is
+present on the VGM series boards.
+
+To use the mailbox, an application can override
+BSP_pgtbl_setup() (copy from powerpc/shared/startup 
+and modify) to map the first page RW with caching
+inhibited. Unfortunately, write protection of the
+exception vector area will be lost.
