@@ -34,7 +34,7 @@ static const char version2[] =
 /* The user-configurable values.
    These may be modified when a driver module is loaded.*/
 
-static int yellowfin_debug = 1;			/* 1 normal messages, 0 quiet .. 7 verbose. */
+int yellowfin_debug = 1;				/* 1 normal messages, 0 quiet .. 7 verbose. */
 /* Maximum events (Rx packets, etc.) to handle at each event reception. */
 static int max_interrupt_work = 20;
 #ifdef YF_PROTOTYPE						/* Support for prototype hardware errata. */
@@ -537,7 +537,7 @@ rtems_yellowfin_driver_attach(struct rtems_bsdnet_ifconfig *config, int attach)
 
 	printk("Yellowfin: A Packet Engines G-NIC ethernet driver for RTEMS\n\n");
 	printk("Copyright 1997-2001, Donald Becker <becker@scyld.com>\n");
-	printk("               2001, Till Straumann <strauman@slac.stanford.edu>\n");
+	printk("          2001-2002, Till Straumann <strauman@slac.stanford.edu> (RTEMS port)\n");
 	printk("LICENSE:   This driver is released under the terms of the GPL,\n");
 	printk("           consult http://www.gnu.org for details\n");
 
@@ -566,7 +566,8 @@ rtems_yellowfin_driver_attach(struct rtems_bsdnet_ifconfig *config, int attach)
 
 	pci_read_config_byte(pciB, pciD, pciF, PCI_INTERRUPT_LINE, &irq);
 
-	printk("%s: %s type %8x at 0x%lx, ",
+	if (yellowfin_debug>0)
+		printk("%s: %s type %8x at 0x%lx, ",
 		   config->name, pci_id_tbl[i].name, inl(ioaddr + ChipRev), ioaddr);
 
 	/* try to read HW address from the device if not overridden
@@ -574,7 +575,8 @@ rtems_yellowfin_driver_attach(struct rtems_bsdnet_ifconfig *config, int attach)
 	 */
 	if (config->hardware_address) {
 		memcpy(hwaddr, config->hardware_address, ETHER_ADDR_LEN);
-		printk(" using MAC addr from config:");
+		if (yellowfin_debug>0)
+			printk(" using MAC addr from config:");
 	} else {
 #ifndef BSP_YELLOWFIN_SUPPLY_HWADDR
 		if (drv_flags & IsGigabit)
@@ -585,14 +587,17 @@ rtems_yellowfin_driver_attach(struct rtems_bsdnet_ifconfig *config, int attach)
 			for (i = 0; i < 6; i++)
 				hwaddr[i] = read_eeprom(ioaddr, ee_offset + i);
 		}
-		printk(" using MAC addr from device:");
+		if (yellowfin_debug>0)
+			printk(" using MAC addr from device:");
 #else
 		BSP_YELLOWFIN_SUPPLY_HWADDR(hwaddr,unit);
 #endif
 	}
 	for (i = 0; i < ETHER_ADDR_LEN-1; i++)
+		if (yellowfin_debug>0)
 			printk("%02x:", hwaddr[i]);
-	printk("%02x, IRQ %d.\n", hwaddr[i], irq);
+	if (yellowfin_debug>0)
+		printk("%02x, IRQ %d.\n", hwaddr[i], irq);
 
 	/* Reset the chip. */
 	outl(0x80000000, ioaddr + DMACtrl);
@@ -667,7 +672,8 @@ rtems_yellowfin_driver_attach(struct rtems_bsdnet_ifconfig *config, int attach)
 			if (mii_status != 0xffff  &&  mii_status != 0x0000) {
 				np->phys[phy_idx++] = phy;
 				np->advertising = mdio_read(ioaddr, phy, 4);
-				printk("%s: MII PHY found at address %d, status "
+				if (yellowfin_debug>0)
+					printk("%s: MII PHY found at address %d, status "
 					   "0x%04x advertising 0x%04x.\n",
 					   ifp->if_name, phy, mii_status, np->advertising);
 			}
@@ -687,7 +693,8 @@ rtems_yellowfin_driver_attach(struct rtems_bsdnet_ifconfig *config, int attach)
 	if_attach(ifp);
 	ether_ifattach(ifp);
 
-	printk("Yellowfin: Ethernet driver has been attached (handle 0x%08x, ifp 0x%08x)\n",
+	if (yellowfin_debug>1)
+		printk("Yellowfin: Ethernet driver has been attached (handle 0x%08x, ifp 0x%08x)\n",
 			np, ifp);
 
 	return 1;
@@ -1043,7 +1050,7 @@ static void yellowfin_init_ring(struct yellowfin_private *yp)
 
 	for (i = 0; i < RX_RING_SIZE; i++) {
 		struct mbuf *m;
-	        MGETHDR(m, M_WAIT, MT_DATA);
+		MGETHDR(m, M_WAIT, MT_DATA);
 		MCLGET(m, M_WAIT);
 		m->m_pkthdr.rcvif =  &yp->arpcom.ac_if;
 
@@ -1868,8 +1875,8 @@ static int set_rx_mode(struct yellowfin_private *yp)
 	/* Stop the Rx process to change any value. */
 	outw(cfg_value & ~0x1000, ioaddr + Cnfg);
 	if (ifp->if_flags & IFF_PROMISC) {			/* Set promiscuous. */
-		/* Unconditionally log net taps. */
-		printk("%s: Promiscuous mode enabled.\n", ifp->if_name);
+		if (yellowfin_debug>0)
+			printk("%s: Promiscuous mode enabled.\n", ifp->if_name);
 		outw(0x000F, ioaddr + AddrMode);
 	} else if ((ac->ac_multicnt > 64)  ||  (ifp->if_flags & IFF_ALLMULTI)) {
 		/* Too many to filter well, or accept all multicasts. */
