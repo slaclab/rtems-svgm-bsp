@@ -24,6 +24,21 @@ _BSP_clear_hostbridge_errors();
 void
 rtemsReboot(void);
 
+static volatile BSP_ExceptionExtension	BSP_exceptionExtension = 0;
+
+BSP_ExceptionExtension
+BSP_exceptionHandlerInstall(BSP_ExceptionExtension e)
+{
+volatile BSP_exceptionExtension	test;
+	if ( RTEMS_SUCCESSFUL != rtems_task_variable_get(RTEMS_SELF, &BSP_exceptionExtension, &test) ) {
+		/* not yet added */
+		rtems_task_variable_add(RTEMS_SELF, &BSP_exceptionExtension, 0);
+	}
+	test = BSP_exceptionExtension;
+	BSP_exceptionExtension = e;
+	return test;
+}
+
 void
 BSP_exceptionHandler(BSP_Exception_frame* excPtr)
 {
@@ -44,7 +59,15 @@ int						quiet=0;
 	} else {
 		/* retrieve the notepad which possibly holds an extention pointer */
 		if (RTEMS_SUCCESSFUL==rtems_task_ident(RTEMS_SELF,RTEMS_LOCAL,&id) &&
-		    RTEMS_SUCCESSFUL==rtems_task_get_note(id, BSP_EXCEPTION_NOTEPAD, &note)) {
+#if 0
+/* Must not use a notepad due to unknown initial value (notepad memory is allocated from the
+ * workspace)!
+ */
+		    RTEMS_SUCCESSFUL==rtems_task_get_note(id, BSP_EXCEPTION_NOTEPAD, &note)
+#else
+			RTEMS_SUCCESSFUL==rtems_task_variable_get(id, &BSP_exceptionExtension, &note)
+#endif
+			) {
 			ext = (BSP_ExceptionExtension)note;
 			if (ext)
 				quiet=ext->quiet;

@@ -8,11 +8,6 @@
 
 #include <bsp/vectors.h>
 
-/* install a BSP_ExceptionExtension pointer to the EXCEPTION_NOTEPAD
- * of a task which wants to catch an exception
- */
-#define BSP_EXCEPTION_NOTEPAD RTEMS_NOTEPAD_8
-
 /* Two types of exception intercepting / catching is supported:
  *
  *  - lowlevel handling (runs at IRQ level, before restoring any
@@ -54,5 +49,19 @@ typedef struct BSP_ExceptionExtensionRec_ {
 
 void
 BSP_exceptionHandler(BSP_Exception_frame* excPtr);
+
+/* install an exception handler to the current task context */
+BSP_ExceptionExtension
+BSP_exceptionHandlerInstall(BSP_ExceptionExtension e)
+{
+volatile BSP_exceptionExtension	test;
+	if ( RTEMS_SUCCESSFUL != rtems_task_variable_get(RTEMS_SELF, &BSP_exceptionExtension, &test) ) {
+		/* not yet added */
+		rtems_task_variable_add(RTEMS_SELF, &BSP_exceptionExtension, 0);
+	}
+	test = BSP_exceptionExtension;
+	BSP_exceptionExtension = e;
+	return test;
+}
 
 #endif
