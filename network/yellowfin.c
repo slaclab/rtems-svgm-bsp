@@ -34,20 +34,22 @@ static const char version2[] =
 /* The user-configurable values.
    These may be modified when a driver module is loaded.*/
 
+#define YF_NEW 1
+
 int yellowfin_debug = 1;				/* 1 normal messages, 0 quiet .. 7 verbose. */
 /* Maximum events (Rx packets, etc.) to handle at each event reception. */
 int yellowfin_max_interrupt_work = 20;
 #ifdef YF_PROTOTYPE						/* Support for prototype hardware errata. */
 /* System-wide count of bogus-rx frames. */
 static int bogus_rx = 0;
-static int dma_ctrl = 0x004A0263; 		/* Constrained by errata */
-static int fifo_cfg = 0x0020;			/* Bypass external Tx FIFO. */
+int yellowfin_dma_ctrl = 0x004A0263; 		/* Constrained by errata */
+int yellowfin_fifo_cfg = 0x0020;			/* Bypass external Tx FIFO. */
 #elif YF_NEW							/* A future perfect board :->.  */
-static int dma_ctrl = 0x00CAC277;		/* Override when loading module! */
-static int fifo_cfg = 0x0028;
+int yellowfin_dma_ctrl = 0x00CAC266;		/* Override when loading module! */
+int yellowfin_fifo_cfg = 0x0028;
 #else
-static int dma_ctrl = 0x004A0263; 		/* Constrained by errata */
-static int fifo_cfg = 0x0020;			/* Bypass external Tx FIFO. */
+int yellowfin_dma_ctrl = 0x004A0263; 		/* Constrained by errata */
+int yellowfin_fifo_cfg = 0x0020;			/* Bypass external Tx FIFO. */
 #endif
 
 /* Set the copy breakpoint for the copy-only-tiny-frames scheme.
@@ -858,8 +860,8 @@ static int yellowfin_init_hw(struct yellowfin_private *yp)
 
 	/* Initialize other registers: with so many this eventually this will
 	   converted to an offset/value list. */
-	outl(dma_ctrl, ioaddr + DMACtrl);
-	outw(fifo_cfg, ioaddr + FIFOcfg);
+	outl(yellowfin_dma_ctrl, ioaddr + DMACtrl);
+	outw(yellowfin_fifo_cfg, ioaddr + FIFOcfg);
 	/* Enable automatic generation of flow control frames, period 0xffff. */
 	outl(0x0030FFFF, ioaddr + FlowCtrl);
 
