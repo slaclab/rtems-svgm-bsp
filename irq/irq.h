@@ -29,7 +29,7 @@
 
 #ifndef ASM
 
-#include <libchip/vmeUniverse.h>
+#include <bsp/vmeUniverse.h>
 /*
  * Symbolic IRQ names and related definitions.
  */

@@ -8,7 +8,7 @@
 /* pull in bsp.h */
 #include <bsp.h>
 /* our VME bridge */
-#include <libchip/vmeUniverse.h>
+#include <bsp/vmeUniverse.h>
 
 /* 
  * The BSP maps VME address ranges into

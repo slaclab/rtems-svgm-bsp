@@ -44,6 +44,7 @@ start/Makefile
 startup/Makefile
 vectors/Makefile
 synergy/Makefile
+vme/Makefile
 wrapup/Makefile])
 
 RTEMS_PPC_EXCEPTIONS([new])

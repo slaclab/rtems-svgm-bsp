@@ -2,7 +2,7 @@
 
 /* VGM implementation of reboot */
 
-#include <libchip/vmeUniverse.h>
+#include <bsp/vmeUniverse.h>
 #include <bspVGM.h>
 
 /* vector through a pointer for trying
