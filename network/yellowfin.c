@@ -186,6 +186,7 @@ MODULE_PARM(gx_fix, "i");
 #include <net/if.h>
 #include <netinet/in.h>
 #include <netinet/if_ether.h>
+#include <libchip/if_media.h>
 
 /* RTEMS event to kill the daemon */
 #define KILL_EVENT		RTEMS_EVENT_1
@@ -470,6 +471,7 @@ struct yellowfin_private {
 		unsigned long	frame_errors;
 		unsigned long	crc_errors;
 		unsigned long	nTxIrqs, nRxIrqs;
+		unsigned long   rxStopped;
 	} stats;
 };
 
@@ -1305,6 +1307,8 @@ struct ifnet	*ifp=&yp->arpcom.ac_if;
 
 		if (events & RX_EVENT) {
 			boguscnt-=yellowfin_rx(yp);
+			if ( ! (0x00000400 & inl(ioaddr + RxStatus)) )
+				yp->stats.rxStopped++;
 			outl(0x10001000, ioaddr + RxCtrl);		/* Wake Rx engine. */
 		}
 
@@ -1937,9 +1941,7 @@ static int yellowfin_ioctl(struct ifnet *ifp, int cmd, caddr_t arg)
 {
 	int		rval=0;
 	struct yellowfin_private *np = ifp->if_softc;
-#ifdef USE_MII_IOCTLS
 	long ioaddr = np->base_addr;
-#endif
 	struct ifreq *ifr=(struct ifreq*)arg;
 
 	if (yellowfin_debug>1)
@@ -1951,6 +1953,80 @@ static int yellowfin_ioctl(struct ifnet *ifp, int cmd, caddr_t arg)
 			printk("Yellowfin: etherioctl...\n");
 		/* handles SIOxIFADDR, SIOCSIFMTU */
 		return ether_ioctl(ifp, cmd, arg);
+
+#if 0
+	case SIOCGIFMEDIA:
+		return	yf_pollstat((struct ifmediareq*)arg);
+#endif
+
+	case SIOCSIFMEDIA:
+		{
+			int media = ifr->ifr_media, cap, spd, duplx;
+			
+			if ( IFM_ETHER != IFM_TYPE(media) )
+				return EINVAL;
+
+			spd = cap = mdio_read(ioaddr, IFM_INST(media), 1);
+
+			if ( 0xffff == cap || 0x0000 == cap )
+				return ENXIO;
+
+			duplx = (IFM_OPTIONS(media) & (IFM_FDX|IFM_HDX));
+
+			switch ( IFM_SUBTYPE(media) ) {
+				case IFM_10_T:      spd = 0x1800; break;
+
+				case IFM_100_TX:    spd = 0x6000; break;
+				case IFM_100_T4:    spd = 0x8000; break;
+
+				case IFM_AUTO:      spd = 0x0008; break;
+				case IFM_NONE:	    spd = 0;      break; /* don't change */
+				default:
+					return EINVAL;
+			}
+
+			if ( duplx ) {
+				if ( 0x0008 == spd || ( 0 == spd && (cap & 0x0020)) ) {
+					/* can't enforce duplex in auto mode */
+					return EINVAL;
+				}
+				/* turn off unwanted duplex mode */
+				spd &= ~(IFM_FDX==duplx ? 0x2800 : 0x5000);
+			}
+
+			/* they want to switch to a unsupported mode */
+			if ( spd && ! (spd & cap) ) {
+				return EOPNOTSUPP;
+			}
+
+			/* set the new mode */
+			if ( 0x0008 == spd || ( 0 == spd && (cap & 0x0020) ) ) {
+				/* set autoneg */
+				np->medialock   = 0;
+				np->duplex_lock = 0;
+				np->full_duplex = 0;
+				cap = 0x1200;
+				/* in autoneg mode, let the timer set the full duplex bit */
+			} else {
+				cap  = mdio_read(ioaddr, IFM_INST(media), 0);
+				cap &= ~0x1000; /* no autoneg */
+				np->medialock   = 1;
+				np->duplex_lock = 1;
+				np->full_duplex = (cap & 0x0100) ? 1 : 0;
+				if ( duplx )
+					np->full_duplex = (duplx & IFM_FDX) ? 1 : 0;
+				if ( !spd ) {
+					spd = cap & 0xe000 ? 0x2000 : 0;
+				}
+				cap = (spd & 0xe000 ? 0x2000 : 0) | (np->full_duplex ? 0x0100 : 0);
+
+				outw(0x101C | (np->full_duplex ? 2 : 0), ioaddr + Cnfg);
+			}
+			/* TODO: probably should update the advertisement register */
+
+			mdio_write(ioaddr, IFM_INST(media), 0, cap);
+		}
+		return 0;
 
 #ifdef USE_MII_IOCTLS
 	case SIOCGMIIPHY:		/* Get the address of the PHY in use. */
@@ -2040,6 +2116,7 @@ static void yellowfin_stats(struct yellowfin_private *yp)
 
 		printf("      Tx Interrupts:%-8lu\n", yp->stats.nTxIrqs);
 		printf(" Reassembled Frames:%-8lu\n", yp->stats.txReassembled);
+		printf(" Rx Halted (0 desc):%-8lu\n", yp->stats.rxStopped);
 }
 
 
