@@ -24,6 +24,12 @@
 #define	_ISA_MEM_BASE		CHRP_ISA_MEM_BASE
 /* start of our ram seen from the PCI bus */
 #define PCI_DRAM_OFFSET		CHRP_PCI_DRAM_OFFSET
+/* SMON has no ISA bus and configures PCI devices' memory space with respect
+ * to 0x00000000 (_not_ as an offset from CHRP_ISA_MEM_BASE)
+ *
+ * PCI memory space as seen from the CPU
+ */
+#define PCI_MEM_BASE		0x00000000
 
 /*
  *  confdefs.h overrides for this BSP:
