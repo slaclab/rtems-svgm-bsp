@@ -51,7 +51,7 @@ int						quiet=0;
 	/* If we are in interrupt context, we are in trouble - skip the user
 	 * hook and panic
 	 */
-	if (_ISR_Is_in_progress()) {
+	if (rtems_interrupt_is_in_progress()) {
 		fmt="Aieeh, Exception %d in interrupt handler\n";
 	} else if ( !_Thread_Executing) {
 		fmt="Aieeh, Exception %d in initialization code\n";
