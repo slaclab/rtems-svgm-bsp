@@ -36,7 +36,10 @@
  *  Calling convention:
  *     R1: SMON SP
  *     R5: where SMON put the image
+ *         if R5 is 0, the preloader will use its entry point
+ *         as the image starting address.
  *     R6: end of the image (i.e. R6-R5 is the image length)
+ *         if R6 is 0, _edata will be used as the image length
  *     R7: the machine's cache line size - MUST be set
  *         by a script!
  *
@@ -86,11 +89,24 @@ preloader:
 	 * in r5 + 4.
 	 */
 	bl	here
-here:	mflr	r0
-	sub	r0,r0,r5
-	cmpwi	r0,(here-preloader)
+here:
+	mr		r0,r5
+	mflr	r5
+	addi	r5,r5,-(here-preloader)
+	cmpwi	r0,0	/* omit the check if r5==0 */
+	beq		no_check
+	cmpw	r0,r5
 	bne	panic
+
+no_check:
+	cmpwi   r6,0
+	bne		has_img_len
+	lis		r30,_edata@h
+	ori		r30,r30,_edata@l
+	b		use_edata
+has_img_len:
 	sub	r30,r6,r5	/* save image length */
+use_edata:
 
 #ifndef CACHE_LINE_SIZE
 	/* Oh well, SMON has inhibited the cache, so this
