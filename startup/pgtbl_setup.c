@@ -3,6 +3,7 @@
 #include <rtems.h>
 #include <libcpu/mmu.h>
 #include <libcpu/page.h>
+#include <rtems/bspIo.h>
 #include "pte121.h"
 
 
