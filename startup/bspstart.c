@@ -228,10 +228,6 @@ void			BSP_pgtbl_activate(Triv121PgTbl);
  * we also want 'special' BREAK processing, so we can
  * reset the board by sending a BREAK to the console...
  */
-static void eax(void)
-{
-printk("atexit BSP\n");
-}
 static void		svgmPostdriverHook(void)
 {
 BSP_UartBreakCbRec cb;
@@ -288,7 +284,6 @@ void bsp_pretasking_hook(void)
 #endif    
     bsp_libc_init((void *) heap_start, heap_size, 0);
 
-	assert(0==atexit(eax));
 	/* put the commandline parameters into the environment */
 	if (buf) {
 			char		*beg,*end;
