@@ -94,6 +94,7 @@
 	 * be loaded at the very beginning. We should probably
 	 * not use more than 255 bytes.
 	 */
+	PUBLIC_VAR(__rtems_start)
 	PUBLIC_VAR(__rtems_entry_point)
 	PUBLIC_VAR(__rtems_end)
 	.section .svgm_preloader_section,"awx",@progbits
@@ -211,9 +212,9 @@ leaveparms:
 return_here:
 	/* now we move the entire rest of the image */
 #ifdef ASSUME_RTEMS_INSTALLS_VECTORS
-	lis		r3,__rtems_entry_point@h
-	ori		r3,r3,__rtems_entry_point@l
-	add		r4,r4,r3		/* should add __rtems_entry_point - KERNELBASE
+	lis		r3,__rtems_start@h
+	ori		r3,r3,__rtems_start@l
+	add		r4,r4,r3		/* should add __rtems_start - KERNELBASE
 							 * but that is 0
 							 */
 	sub		r5,r27,r3
@@ -234,13 +235,9 @@ return_here:
 	ori 	r0,r0,MSR_IR|MSR_DR|MSR_IP
 	xori	r0,r0,MSR_IR|MSR_DR
 	mtsrr1	r0
-#ifdef ASSUME_RTEMS_INSTALLS_VECTORS
-	mtsrr0	r3
-#else
 	lis		r0,__rtems_entry_point@h
 	ori		r0,r0,__rtems_entry_point@l
 	mtsrr0	r0
-#endif
 	/* R6: start of command line */
 	/* R7: end of command line +1 */
 	rfi
@@ -263,8 +260,11 @@ domove:
 	stwu	r0,4(r17)
 	bdnz	1b				/* move data */
 	/* now, we must flush the destination cache region */
+#ifndef CACHE_LINE_SIZE
 	cmpwi	r16,0
 	beq		3f				/* nothing to do */
+#endif
+#if defined(CACHE_LINE_SIZE) && CACHE_LINE_SIZE > 0
 	add		r17,r3,r5		/* target end pointer */
 	subi	r0,r16,1
 	add		r17,r17,r0
@@ -277,6 +277,7 @@ domove:
 	blt		2b
 	sync					/* make sure data is written back */
 	isync					/* invalidate possibly preloaded instructions */
+#endif
 3:
 	blr
 

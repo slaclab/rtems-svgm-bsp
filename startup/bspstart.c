@@ -93,19 +93,24 @@ static void fillin_srvrandfile(void);
  *
  * These names are long and ugly to prevent name clashes
  * (global namespace :-()
+ *
+ * Use the ugly [] construct when declaring the external
+ * (linker script defined) variables to prevent the compiler
+ * from accessing them in the short data areas (-msdata=eabi)
+ * which could result in a linkage error.
  */
-extern char   						*__BSP_wrap_rtems_bsdnet_bootp_boot_file_name;
-extern char   						*__BSP_wrap_rtems_bsdnet_bootp_cmdline;
-extern struct in_addr				__BSP_wrap_rtems_bsdnet_bootp_server_address;
-extern struct rtems_bsdnet_config	__BSP_wrap_rtems_bsdnet_config;
+extern char   						*__BSP_wrap_rtems_bsdnet_bootp_boot_file_name[];
+extern char   						*__BSP_wrap_rtems_bsdnet_bootp_cmdline[];
+extern struct in_addr				__BSP_wrap_rtems_bsdnet_bootp_server_address[];
+extern struct rtems_bsdnet_config	__BSP_wrap_rtems_bsdnet_config[];
 void								__BSP_wrap_rtems_bsdnet_do_bootp();
 int									__BSP_wrap_inet_pton();
 int									__BSP_wrap_rtems_bsdnet_loopattach();
 
-#define bootp_file					__BSP_wrap_rtems_bsdnet_bootp_boot_file_name
-#define bootp_cmdline				__BSP_wrap_rtems_bsdnet_bootp_cmdline
-#define bootp_srvr					__BSP_wrap_rtems_bsdnet_bootp_server_address
-#define net_config					__BSP_wrap_rtems_bsdnet_config
+#define bootp_file					(__BSP_wrap_rtems_bsdnet_bootp_boot_file_name[0])
+#define bootp_cmdline				(__BSP_wrap_rtems_bsdnet_bootp_cmdline[0])
+#define bootp_srvr					(__BSP_wrap_rtems_bsdnet_bootp_server_address[0])
+#define net_config					(__BSP_wrap_rtems_bsdnet_config[0])
 #define do_bootp					__BSP_wrap_rtems_bsdnet_do_bootp
 #define INET_PTON					__BSP_wrap_inet_pton
 #define loopattach					__BSP_wrap_rtems_bsdnet_loopattach
@@ -142,7 +147,8 @@ int									__BSP_wrap_rtems_bsdnet_loopattach();
 
 SPR_RW(DABR)
 
-extern unsigned long __rtems_end;
+/* prevent this from ending up in the short data area */
+extern unsigned long __rtems_end[];
 extern void		L1_caches_enables();
 extern unsigned get_L2CR();
 extern unsigned set_L2CR(unsigned);
@@ -184,7 +190,7 @@ static unsigned long
 heapStart(void)
 {
 unsigned long rval;
-    rval = ((rtems_unsigned32) &__rtems_end) +INIT_STACK_SIZE + INTR_STACK_SIZE;
+    rval = ((rtems_unsigned32) __rtems_end) +INIT_STACK_SIZE + INTR_STACK_SIZE;
     if (rval & (CPU_ALIGNMENT-1))
         rval = (rval + CPU_ALIGNMENT) & ~(CPU_ALIGNMENT-1);
 	return rval;
@@ -476,11 +482,12 @@ my_bootp_intercept(void)
 
 void zero_bss()
 {
-  extern unsigned long __bss_start, __sbss_start, __sbss_end;
-  extern unsigned long __sbss2_start, __sbss2_end;
-  memset(&__sbss_start, 0, ((unsigned) (&__sbss_end)) - ((unsigned) &__sbss_start));
-  memset(&__sbss2_start, 0, ((unsigned) (&__sbss2_end)) - ((unsigned) &__sbss2_start));
-  memset(&__bss_start, 0, ((unsigned) (&__rtems_end)) - ((unsigned) &__bss_start));
+  /* prevent these from being accessed in the short data areas */
+  extern unsigned long __bss_start[], __sbss_start[], __sbss_end[];
+  extern unsigned long __sbss2_start[], __sbss2_end[];
+  memset(__sbss_start, 0, ((unsigned) __sbss_end) - ((unsigned)__sbss_start));
+  memset(__sbss2_start, 0, ((unsigned) __sbss2_end) - ((unsigned)__sbss2_start));
+  memset(__bss_start, 0, ((unsigned) __rtems_end) - ((unsigned)__bss_start));
 }
 
 
@@ -516,6 +523,9 @@ void zero_bss()
  * the data to the environment / malloced areas...
  */
 
+/* this routine is called early and must be safe with a not properly
+ * aligned stack
+ */
 void
 save_boot_params(void *r3, void *r4, void* r5, char *cmdline_start, char *cmdline_end)
 {
@@ -616,14 +626,14 @@ void bsp_start( void )
    * so there is no need to set it in r1 again... It is just for info
    * so that It can be printed without accessing R1.
    */
-  stack = ((unsigned char*) &__rtems_end) + INIT_STACK_SIZE - CPU_MINIMUM_STACK_FRAME_SIZE;
+  stack = ((unsigned char*) __rtems_end) + INIT_STACK_SIZE - CPU_MINIMUM_STACK_FRAME_SIZE;
 
   /* tag the bottom, so a stack trace utility may know when to stop */
   *((unsigned32 *)stack) = 0;
 
   /* fill stack with pattern for debugging */
   __asm__ __volatile__("mr %0, %%r1":"=r"(r1sp));
-  while (--r1sp >= (unsigned long*)&__rtems_end)
+  while (--r1sp >= (unsigned long*)__rtems_end)
 	  *r1sp=0xeeeeeeee;
 
   /*
@@ -634,7 +644,10 @@ void bsp_start( void )
    * This could be done latter (e.g in IRQ_INIT) but it helps to understand
    * some settings below...
    */
-  intrStack = ((unsigned char*) &__rtems_end) + INIT_STACK_SIZE + INTR_STACK_SIZE - CPU_MINIMUM_STACK_FRAME_SIZE;
+  intrStack = ((unsigned char*) __rtems_end) + INIT_STACK_SIZE + INTR_STACK_SIZE - CPU_MINIMUM_STACK_FRAME_SIZE;
+
+  /* make sure it's properly aligned */
+  (unsigned32)intrStack &= ~(CPU_STACK_ALIGNMENT-1);
 
   /* tag the bottom of the interrupt stack as well */
   *((unsigned32 *)intrStack) = 0;
@@ -753,7 +766,7 @@ void bsp_start( void )
   work_space_start = 
     (unsigned char *)BSP_mem_size - BSP_Configuration.work_space_size;
 
-  if ( work_space_start <= ((unsigned char *)&__rtems_end) + INIT_STACK_SIZE + INTR_STACK_SIZE) {
+  if ( work_space_start <= ((unsigned char *)__rtems_end) + INIT_STACK_SIZE + INTR_STACK_SIZE) {
     printk( "bspstart: Not enough RAM!!!\n" );
     bsp_cleanup();
   }

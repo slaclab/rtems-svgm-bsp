@@ -5,6 +5,8 @@ ENTRY(_start)
 /* Do we need any of these for elf?
    __DYNAMIC = 0;    */
 PROVIDE (__stack = 0);
+
+
 MEMORY {
 	VECTORS	: ORIGIN = 0x0 ,  LENGTH = 0x3000
 	CODE : ORIGIN = 0x3000 , LENGTH = 0x400000 
@@ -17,16 +19,23 @@ SECTIONS
  	*(.entry_point_section)
   }
 
-  /*
-   * This section is used only if NO_DYNAMIC_EXCEPTION_VECTOR_INSTALL
-   * is defined in vectors/vectors.S
-   */
   .vectors :
   {
 	*(.svgm_preloader_section)
 	. = ABSOLUTE(0x100) ;
+   /*
+    * This section is used only if NO_DYNAMIC_EXCEPTION_VECTOR_INSTALL
+    * is defined in vectors/vectors.S
+    */
     *(.vectors)
   } > VECTORS
+
+
+  /* START OF THE LOADED IMAGE (parts moved by the preloader) */
+  .image_start :
+  {
+	__rtems_start = ABSOLUTE(.);
+  } > CODE
 
   /* Read-only sections, merged into text segment: */
   .interp   : { *(.interp) }	> CODE
@@ -55,6 +64,9 @@ SECTIONS
   .rela.sbss      : { *(.rela.sbss)     }	> CODE
   .rela.sdata2    : { *(.rela.sdata2)   }	> CODE
   .rela.sbss2     : { *(.rela.sbss2)    }	> CODE
+
+  .init			  : { *(.init)			} >CODE
+
   .text      :	
   {
     *(.text)	
@@ -73,10 +85,11 @@ SECTIONS
     *(.gnu.warning)
     *(.gnu.linkonce.t*)
   }  > CODE
-  .init			  : { _init = .; *(.init)	} >CODE
+
   .fini			  : { _fini = .; *(.fini)	} >CODE
   .rodata         : { *(.rodata*) *(.gnu.linkonce.r*) }	> CODE
   .rodata1        : { *(.rodata1) }	> CODE
+_SDA2_BASE_ = __SDATA2_START__ + 0x8000;
   .sdata2         : { *(.sdata2) *(.gnu.linkonce.s2.*)  }	> CODE
   .sbss2          : { 
     				PROVIDE (__sbss2_start = .);
@@ -118,12 +131,30 @@ SECTIONS
      The current compiler no longer needs this, but keep it around for 2.7.2  */
                 PROVIDE (_GOT2_START_ = .);
   .got2           :  { *(.got2) }	> CODE
+/*
                 PROVIDE (__CTOR_LIST__ = .);
   .ctors          : { *(.ctors) }	> CODE
                 PROVIDE (__CTOR_END__ = .);
+*/
+  .ctors :
+  {
+    KEEP(*crtbegin.o(.ctors))
+    KEEP(*(EXCLUDE_FILE(*crtend.o) .ctors))
+    KEEP(*(SORT(.ctors.*)))
+    KEEP(*(.ctors))
+  } > CODE
+  .dtors :
+  {
+    KEEP(*crtbegin.o(.dtors))
+    KEEP(*(EXCLUDE_FILE(*crtend.o) .dtors))
+    KEEP(*(SORT(.dtors.*)))
+    KEEP(*(.dtors))
+  } > CODE
+/*
                 PROVIDE (__DTOR_LIST__ = .);
   .dtors          : { *(.dtors) }	> CODE
                 PROVIDE (__DTOR_END__ = .);
+*/
                 PROVIDE (_FIXUP_START_ = .);
   .fixup          : { *(.fixup) }	> CODE
                 PROVIDE (_FIXUP_END_ = .);
@@ -132,12 +163,18 @@ SECTIONS
   .got            : { *(.got) }	> CODE
   .got.plt        : { *(.got.plt) }	> CODE
                 PROVIDE (_GOT_END_ = .);
+
+  .jcr            : { KEEP (*(.jcr)) } > CODE
+
   /* We want the small data sections together, so single-instruction offsets
      can access them all, and initialized data all before uninitialized, so
      we can shorten the on-disk segment size.  */
+_SDA_BASE_ = __SDATA_START__ + 0x8000;
   .sdata          : { *(.sdata) *(.gnu.linkonce.s.*) }	> CODE
   _edata  =  .;
   PROVIDE (edata = .);
+/* END OF THE LOADED IMAGE (parts moved by the preloader) */
+/* BELOW THIS POINT, NO LOADABLE ITEMS MUST APPEAR */
   .sbss      :
   {
     PROVIDE (__sbss_start = ABSOLUTE(.));
@@ -155,6 +192,9 @@ SECTIONS
    *(COMMON)
   . = ALIGN(16);
   } > CODE
+  /* proper alignment for SYSV stack
+   * (init stack is allocated just after __rtems_end
+   */
   . = ALIGN(16);
   _end = . ;
   __rtems_end = . ;
