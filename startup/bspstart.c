@@ -433,7 +433,7 @@ void bsp_start( void )
   }
 
   printk("-----------------------------------------\n");
-  printk("Welcome to RTEMS RELEASE %s on %s/%s/%s\n",
+  printk("Welcome to RTEMS RELEASE %s/svgm on %s/%s/%s\n",
 		  RTEMS_VERSION, chpt, CPU_NAME, current_ppc_cpu_name);
   printk("SSRL Release $Name$/$Date$\n");
   printk("-----------------------------------------\n");
