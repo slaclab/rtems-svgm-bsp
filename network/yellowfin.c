@@ -77,7 +77,10 @@ static int gx_fix = 0;
    There are no ill effects from too-large receive rings. */
 #define TX_RING_SIZE	16
 #define TX_QUEUE_SIZE	12		/* Must be > 4 && <= TX_RING_SIZE */
-#define RX_RING_SIZE	32	/* TSILL_TODO was 64, reduced to test because RTEMS ran out of mbufs */
+#define RX_RING_SIZE	32		/* TSILL_TODO was 64, reduced to test because RTEMS ran out of mbufs */
+/* TODO: use of MBUF clusters (4k each) seems to be quite wasteful
+ * for ethernet...
+ */
 
 /* Operational parameters that usually are not changed. */
 /* Time in jiffies before concluding the transmitter is hung. */
@@ -184,10 +187,16 @@ MODULE_PARM(gx_fix, "i");
 #include <netinet/in.h>
 #include <netinet/if_ether.h>
 
-/* RTEMS event used by the ISR */
-#define INTERRUPT_EVENT	RTEMS_EVENT_1
 /* RTEMS event to kill the daemon */
-#define KILL_EVENT		RTEMS_EVENT_2
+#define KILL_EVENT	RTEMS_EVENT_1
+/* RTEMS event to restart the transmitter */
+#define RESTART_EVENT	RTEMS_EVENT_2
+/* RTEMS events used by the ISR */
+#define RX_EVENT	RTEMS_EVENT_3
+#define TX_EVENT	RTEMS_EVENT_4
+#define ERR_EVENT	RTEMS_EVENT_5
+
+#define ALL_EVENTS (KILL_EVENT|RESTART_EVENT|RX_EVENT|TX_EVENT|ERR_EVENT)
 
 #ifdef malloc
 #undef malloc	/* bsdnet redefines malloc to its own rtems_bsdnet_malloc
@@ -428,11 +437,12 @@ struct yellowfin_private {
 	unsigned char phys[2];				/* MII device addresses. */
 	long	base_addr;
 	int	irq;
-	struct	arpcom	arpcom;			/* rtems if structure, contains ifnet */
+	struct	arpcom	arpcom;				/* rtems if structure, contains ifnet */
 	rtems_id	daemonTid;
-	rtems_id	daemonSync;			/* synchronization with the daemon */
+	rtems_id	daemonSync;				/* synchronization with the daemon */
 
 	/* statistics */
+	long 		 intr_status;			/* this field is modified by the ISR */
 	struct {
 		unsigned long	txReassembled;
 		unsigned long 	length_errors;
@@ -454,7 +464,7 @@ static void yellowfin_tx_timeout(struct net_device *dev);
 static void yellowfin_init_ring(struct yellowfin_private *yp);
 static int yellowfin_sendpacket(struct mbuf *skb, struct yellowfin_private *dev);
 static int yellowfin_rx(struct yellowfin_private *dev);
-static void yellowfin_error(struct yellowfin_private *dev, int intr_status);
+static void yellowfin_error(struct yellowfin_private *dev);
 static void yellowfin_stop(struct yellowfin_private *yp);
 static int yellowfin_stop_hw(struct yellowfin_private *yp);
 static void yellowfin_start(struct ifnet * ifp);
@@ -728,19 +738,27 @@ static int yellowfin_irq_is_on(const rtems_irq_connect_data *c)
 	return 0; /* keep compiler happy */
 }
 
+
 /* Oh well, this is really, really, STUPID
  * --> only ONE instance supported
  */
 static void yellowfin_isr(void)
 {
-	unsigned long *tsill=(void*)0x200000;
+struct yellowfin_private *yp = root_yellowfin_dev;
+u16				intr_status = inw(yp->base_addr + IntrClear);
+rtems_event_set	evs=0;
 	/* wakeup the networking task and let it do
 	 * all of the work...
 	 */
-	rtems_event_send(root_yellowfin_dev->daemonTid, INTERRUPT_EVENT);
-	*tsill=0xdeadbeef;
-	(*(tsill+1))++;
-	__asm__ __volatile__("dcbst 0, %0; sync"::"r"(tsill));	
+	if ((0x2ee & intr_status) || 0==intr_status) {
+			yp->intr_status = intr_status;
+			evs |= ERR_EVENT;
+	}
+	if (IntrTxDone & intr_status)
+			evs |= TX_EVENT;
+	if ((IntrRxDone|IntrEarlyRx)&intr_status)
+			evs |= RX_EVENT;
+	rtems_event_send(yp->daemonTid, evs);
 }
 
 rtems_irq_connect_data yellowfin_irq_info={
@@ -814,7 +832,6 @@ static int yellowfin_init_hw(struct yellowfin_private *yp)
 	if (!BSP_install_rtems_irq_handler(&yellowfin_irq_info))
 		rtems_panic("yellowfin: unable to install ISR");
 
-
 	outw(0x0000, ioaddr + EventStatus);		/* Clear non-interrupting events */
 	outl(0x80008000, ioaddr + RxCtrl);		/* Start Rx and Tx channels. */
 	outl(0x80008000, ioaddr + TxCtrl);
@@ -839,8 +856,9 @@ static int yellowfin_init_hw(struct yellowfin_private *yp)
 static void yellowfin_init(void *arg)
 {
 	struct yellowfin_private *yp = arg;
-	printk("yellowfin_init(): entering... (YP: 0x%08x, daemon ID: 0x%08x)\n",
-			yp, yp->daemonTid);
+	if (yellowfin_debug > 2 )
+		printk("yellowfin_init(): entering... (YP: 0x%08x, daemon ID: 0x%08x)\n",
+				yp, yp->daemonTid);
 
 	if (yp->daemonTid) {
 		printk("Yellowfin: daemon already up, doing nothing\n");
@@ -849,6 +867,10 @@ static void yellowfin_init(void *arg)
 	/* launch network daemon */
 	yp->daemonTid = rtems_bsdnet_newproc(YELLOWFIN_TASK_NAME,4096,yellowfin_daemon,arg);
 
+#if 0	/* in ss-20011025 any task created by 'bsdnet_newproc' is wrapped by
+	   code which acquires the network semaphore. Hence I moved this
+	   to the daemon...
+	 */
 	/* wait for the daemon to start up */
 	rtems_semaphore_obtain(yp->daemonSync, RTEMS_WAIT, RTEMS_NO_TIMEOUT);
 
@@ -857,6 +879,10 @@ static void yellowfin_init(void *arg)
 	 * having the daemon do it [although it is probably safe, too].
 	 */
 	yp->arpcom.ac_if.if_flags |= IFF_RUNNING;
+#endif
+
+	if (yellowfin_debug > 2 )
+		printk("yellowfin_init(): leaving.\n");
 }
 
 #ifdef TSILL_TODO
@@ -1187,19 +1213,25 @@ static void yellowfin_daemon(void *arg)
 {
 struct yellowfin_private *yp = (struct yellowfin_private*)arg;
 long		ioaddr = yp->base_addr;
-int		boguscnt;
+int		boguscnt = max_interrupt_work;
 rtems_event_set	events;
 struct mbuf	*m;
-u16		intr_status;
 struct ifnet	*ifp=&yp->arpcom.ac_if;
 
-	printk("Yellowfin daemon: starting...\n");
+	if (yellowfin_debug > 1)
+		printk("Yellowfin daemon: starting...\n");
 
 	/* initialize the hardware and let the task
 	 * that spawned us continue
 	 */
 	(void)yellowfin_init_hw(yp);
+#if 0	/* see comment in yellowfin_init(); in newer versions of
+	   rtems, we old the network semaphore at this point
+	 */
 	rtems_semaphore_release(yp->daemonSync);
+#else
+	yp->arpcom.ac_if.if_flags |= IFF_RUNNING;
+#endif
 
 	/* NOTE: our creator possibly holds the bsdnet_semaphore.
 	 *       since that has PRIORITY_INVERSION enabled, our
@@ -1216,7 +1248,7 @@ struct ifnet	*ifp=&yp->arpcom.ac_if;
 		 *       the global bsdnet semaphore for
 		 *       mutual exclusion.
 		 */
-		rtems_bsdnet_event_receive(INTERRUPT_EVENT,
+		rtems_bsdnet_event_receive(ALL_EVENTS,
 				RTEMS_WAIT | RTEMS_EVENT_ANY,
 				RTEMS_NO_TIMEOUT,
 				&events);
@@ -1226,20 +1258,8 @@ struct ifnet	*ifp=&yp->arpcom.ac_if;
 		}
 
 		boguscnt = max_interrupt_work;
-		/* clear interrupt status */
-		intr_status = inw(ioaddr + IntrClear);
 
-		if (yellowfin_debug > 4)
-			printk("%s%d: Yellowfin interrupt, status 0x%04x.\n",
-				   ifp->if_name, ifp->if_unit, intr_status);
-
-		if (intr_status == 0) {
-			if (yellowfin_debug>5)
-				printk("Yellowfin: Hmmm, got event but nothing to do?\n");
-			continue;
-		}
-
-		if (intr_status & (IntrRxDone | IntrEarlyRx)) {
+		if (events & RX_EVENT) {
 			boguscnt-=yellowfin_rx(yp);
 			outl(0x10001000, ioaddr + RxCtrl);		/* Wake Rx engine. */
 		}
@@ -1364,13 +1384,15 @@ struct ifnet	*ifp=&yp->arpcom.ac_if;
 		}
 
 		/* Log errors and other uncommon events. */
-		if (intr_status & 0x2ee)	/* Abnormal error summary. */
-			yellowfin_error(yp, intr_status);
+		if (ERR_EVENT & events) {
+			/* Abnormal error summary. */
+			yellowfin_error(yp);
+		}
 
 		if (boguscnt < 0) {
-			printk("Warning %s%d: Too much work for daemon, "
-				   "status=0x%04x.\n",
-				   ifp->if_name, ifp->if_unit, intr_status);
+			printk("Warning %s%d: Too much work for daemon\n",
+				   ifp->if_name, ifp->if_unit);
+			rtems_task_wake_after(10); /* TODO: chose time */
 		}
 	}
 	ifp->if_flags &= ~(IFF_RUNNING|IFF_OACTIVE);
@@ -1416,11 +1438,14 @@ struct ifnet	*ifp=&yp->arpcom.ac_if;
  *          }
  *          refill_all_empty_descs();
  *          wake_up_rx_engine();
+ *
+ * RETURNS: number of packets received;
  */
 
 static int yellowfin_rx(struct yellowfin_private *yp)
 {
 	int entry = yp->cur_rx % RX_RING_SIZE;
+	int nloops = 0;
 	int boguscnt = yp->dirty_rx + RX_RING_SIZE - yp->cur_rx;
 	struct ifnet *ifp = & yp->arpcom.ac_if;
 
@@ -1441,6 +1466,7 @@ static int yellowfin_rx(struct yellowfin_private *yp)
 			& 0xffff;
 		u8 *buf_addr = le32desc_to_virt(desc->addr);
 		s16 frame_status = get_unaligned((s16*)&(buf_addr[data_size - 2]));
+		nloops++;
 
 		if (yellowfin_debug > 4)
 			printk("  yellowfin_rx() status was 0x%04x.\n",
@@ -1599,26 +1625,42 @@ static int yellowfin_rx(struct yellowfin_private *yp)
 			/* both should be 0 now */
 	}
 
-	return 0;
+	return nloops;
 }
 
-static void yellowfin_error(struct yellowfin_private *yp, int intr_status)
+static void yellowfin_error(struct yellowfin_private *yp)
 {
-	struct ifnet *ifp = &yp->arpcom.ac_if;
-	printk("%s: Something Wicked happened! 0x%04x.\n",
-		   ifp->if_name, intr_status);
-	/* Hmmmmm, it's not clear what to do here. */
-	if (intr_status & (IntrTxPCIErr | IntrTxPCIFault))
-		ifp->if_oerrors++;
-	if (intr_status & (IntrRxPCIErr | IntrRxPCIFault))
-		ifp->if_ierrors++;
+	struct ifnet			*ifp = &yp->arpcom.ac_if;
+	unsigned long			intr_status;
+	rtems_interrupt_level	l;
+
+	/* read and reset the status; because this is written
+	 * by the ISR, we must disable interrupts here
+	 */
+	rtems_interrupt_disable(l);
+		intr_status = yp->intr_status;
+		yp->intr_status=0;
+	rtems_interrupt_enable(l);
+
+	if (intr_status) {
+			printk("%s%d: Something Wicked happened! 0x%04x.\n",
+							ifp->if_name, ifp->if_unit, intr_status);
+			/* Hmmmmm, it's not clear what to do here. */
+			if (intr_status & (IntrTxPCIErr | IntrTxPCIFault))
+					ifp->if_oerrors++;
+			if (intr_status & (IntrRxPCIErr | IntrRxPCIFault))
+					ifp->if_ierrors++;
+	} else {
+			printk("%s%d: Hmmm, got interrupt but nothing to do?\n",
+					ifp->if_name, ifp->if_unit);
+	}
 }
 
 static void yellowfin_start(struct ifnet * ifp)
 {
 	struct yellowfin_private *yp=ifp->if_softc;
 	ifp->if_flags |= IFF_OACTIVE;
-	rtems_event_send (yp->daemonTid, INTERRUPT_EVENT);
+	rtems_event_send (yp->daemonTid, RESTART_EVENT);
 }
 
 static void yellowfin_stop(struct yellowfin_private *yp)
