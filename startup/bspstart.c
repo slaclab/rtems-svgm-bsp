@@ -145,6 +145,8 @@ int									__BSP_wrap_rtems_bsdnet_loopattach();
 
 SPR_RW(DABR)
 SPR_RW(HID0)
+SPR_RW(SPRG0)
+SPR_RW(SPRG1)
 
 /* prevent this from ending up in the short data area */
 extern unsigned long __rtems_end[];
@@ -554,7 +556,6 @@ void bsp_start( void )
   unsigned long				*r1sp;
   unsigned					l2cr;
   register unsigned char*	intrStack;
-  register unsigned int		intrNestingLevel = 0;
   unsigned char				*work_space_start;
   ppc_cpu_id_t				myCpu;
   ppc_cpu_revision_t		myCpuRevision;
@@ -636,7 +637,6 @@ void bsp_start( void )
 
   /*
    * Initialize the interrupt related settings
-   * SPRG0 = interrupt nesting level count
    * SPRG1 = software managed IRQ stack
    *
    * This could be done latter (e.g in IRQ_INIT) but it helps to understand
@@ -654,14 +654,11 @@ void bsp_start( void )
   while (--r1sp >= (unsigned long*)( intrStack - (INTR_STACK_SIZE - 8)))
 	  *r1sp=0xeeeeeeee;
 
-  asm volatile ("mtspr	%2, %0"
-				: "=r" (intrStack)
-				: "0" (intrStack), "i"(SPRG1)
-			   );
-  asm volatile ("mtspr	%2, %0"
-				: "=r" (intrNestingLevel)
-				: "0" (intrNestingLevel), "i"(SPRG0)
-			   );
+  _write_SPRG1((unsigned int)intrStack);
+
+  /* signal them that we have fixed PR288 - eventually, this should go away */
+  _write_SPRG0(PPC_BSP_HAS_FIXED_PR288);
+
   /*
    * Initialize default raw exception handlers. See vectors/vectors_init.c
    */
