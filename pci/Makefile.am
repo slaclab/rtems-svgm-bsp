@@ -11,6 +11,8 @@ C_O_FILES = $(C_FILES:%.c=$(ARCH)/%.o)
 
 H_FILES = ../../shared/pci/pci.h
 
+EXTRA_DIST = detect_grackle_bridge.c
+
 OBJS = $(C_O_FILES)
 
 include $(RTEMS_ROOT)/make/custom/@RTEMS_BSP@.cfg

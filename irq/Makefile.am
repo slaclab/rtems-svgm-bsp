@@ -15,6 +15,8 @@ H_FILES = irq.h
 S_FILES = irq_asm.S
 S_O_FILES = $(S_FILES:%.S=$(ARCH)/%.o)
 
+EXTRA_DIST = irq_init.c
+
 OBJS = $(S_O_FILES) $(C_O_FILES)
 
 include $(RTEMS_ROOT)/make/custom/@RTEMS_BSP@.cfg

@@ -16,6 +16,8 @@ PGM = $(ARCH)/$(SVGM_PREFIX)start.o
 S_FILES = preload.S start.S
 S_O_FILES = $(S_FILES:%.S=$(ARCH)/%.o)
 
+EXTRA_DIST = preload.S
+
 OBJS = $(S_O_FILES)
 
 include $(RTEMS_ROOT)/make/custom/@RTEMS_BSP@.cfg

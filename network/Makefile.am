@@ -9,6 +9,8 @@ VPATH = @srcdir@:
 C_FILES = yellowfin.c
 C_O_FILES = $(C_FILES:%.c=$(ARCH)/%.o)
 
+EXTRA_DIST = yellowfin.c
+
 H_FILES = yf_rtemscompat.h
 
 OBJS = $(C_O_FILES)

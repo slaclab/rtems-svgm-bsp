@@ -36,6 +36,7 @@ TMPINSTALL_FILES += $(PROJECT_RELEASE)/lib/linkcmds
 
 all-local: $(ARCH) $(OBJS) $(TMPINSTALL_FILES)
 
-EXTRA_DIST = linkcmds
+EXTRA_DIST = linkcmds bspstart.c  pgtbl_activate.c \
+			 vmeconfig.c bootpstuff.c  pgtbl_setup.c
 
 include $(top_srcdir)/../../../../../../automake/local.am
