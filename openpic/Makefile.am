@@ -1,18 +1,19 @@
 ##
-## $Id$
+## Makefile.am,v 1.7 2002/12/17 15:10:31 ralf Exp
 ##
 
-AUTOMAKE_OPTIONS = foreign 1.4
 
 VPATH = @srcdir@:@srcdir@/../../shared/openpic
 
 C_FILES = openpic.c
 
+include_bspdir = $(includedir)/bsp
+include_bsp_HEADERS = ../../shared/openpic/openpic.h
+
 H_FILES = ../../shared/openpic/openpic.h
 
-OBJS = $(C_FILES:%.c=$(ARCH)/%.o)
+OBJS = $(C_FILES:%.c=$(ARCH)/%.$(OBJEXT))
 
-include $(RTEMS_ROOT)/make/custom/@RTEMS_BSP@.cfg
 include $(top_srcdir)/../../../../../../automake/compile.am
 include $(top_srcdir)/../../../../../../automake/lib.am
 

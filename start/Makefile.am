@@ -7,36 +7,35 @@
 ## shared start file
 SVGM_PREFIX = svgm
 
-AUTOMAKE_OPTIONS = foreign 1.4
-
 VPATH = @srcdir@:@srcdir@/../../shared/start
 
-PGM = $(ARCH)/$(SVGM_PREFIX)start.o
+PGM = $(ARCH)/$(SVGM_PREFIX)start.$(OBJEXT)
 
 S_FILES = preload.S start.S
-S_O_FILES = $(S_FILES:%.S=$(ARCH)/%.o)
+S_O_FILES = $(S_FILES:%.S=$(ARCH)/%.$(OBJEXT))
 
 EXTRA_DIST = preload.S
 
 OBJS = $(S_O_FILES)
 
-include $(RTEMS_ROOT)/make/custom/@RTEMS_BSP@.cfg
 include $(top_srcdir)/../../../../../../automake/compile.am
 include $(top_srcdir)/../../../../../../automake/lib.am
 
 #
 # (OPTIONAL) Add local stuff here using +=
 #
-$(PGM):	$(OBJS)
-	$(LD) -r -o $@ $^
+bsplib_DATA = $(PROJECT_RELEASE)/lib/$(SVGM_PREFIX)start$(LIB_VARIANT).$(OBJEXT)
 
-$(PROJECT_RELEASE)/lib/$(SVGM_PREFIX)start$(LIB_VARIANT).o: $(PGM)
+$(PROJECT_RELEASE)/lib/$(SVGM_PREFIX)start$(LIB_VARIANT).$(OBJEXT): $(PGM)
 	$(INSTALL_DATA) $< $@
 
-TMPINSTALL_FILES += $(PROJECT_RELEASE)/lib/$(SVGM_PREFIX)start$(LIB_VARIANT).o
+TMPINSTALL_FILES += $(PROJECT_RELEASE)/lib/$(SVGM_PREFIX)start$(LIB_VARIANT).$(OBJEXT)
 
 all-local: $(ARCH) $(OBJS) $(PGM) $(TMPINSTALL_FILES)
 
-.PRECIOUS: $(PGM)
+$(OBJS):$(ARCH)
+
+$(PGM):	$(OBJS)
+	$(LD) -r -o $@ $^
 
 include $(top_srcdir)/../../../../../../automake/local.am

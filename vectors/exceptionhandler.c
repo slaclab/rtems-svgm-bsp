@@ -7,6 +7,7 @@
 #include <bsp.h>
 #include <bsp/vectors.h>
 #include <libcpu/raw_exception.h>
+#include <libcpu/spr.h>
 #include <bsp/pci.h>
 #include <rtems/bspIo.h>
 
@@ -200,13 +201,11 @@ int						quiet=0;
 				return;
 			}
 			if (excPtr->EXC_SRR1 & MSR_FP) {
-				register unsigned msr;
 				/* thread dispatching is _not_ disabled at this point; hence
 				 * we must make sure we have the FPU enabled...
 				 */
-				__asm__ __volatile__("mfmsr %0":"=r"(msr));
-				msr |= MSR_FP;
-				__asm__ __volatile__("mtmsr %0; isync"::"r"(msr));
+				_write_MSR( _read_MSR() | MSR_FP );
+				__asm__ __volatile__("isync");
 			}
 			printk("unrecoverable exception!!! task %08x suspended\n",id);
 			rtems_task_suspend(id);

@@ -514,10 +514,15 @@ rtems_yellowfin_driver_attach(struct rtems_bsdnet_ifconfig *config, int attach)
 	int		pciB,pciD,pciF,chip_idx;
 	unsigned long 	ioaddr;
 	unsigned char	irq, hwaddr[ETHER_ADDR_LEN];
+	char			*name;
 	struct ifnet	*ifp;
 
-	if (root_yellowfin_dev) {
-		rtems_panic("yellowfin: multiple devices not implemented");
+	unit = rtems_bsdnet_parse_driver_name(config, &name);
+	if (unit < 0)
+		return 0;
+
+	if (root_yellowfin_dev && 1!=unit) {
+		rtems_panic("yellowfin: multiple devices not implemented; only unit 1 supported");
 		/* support for multiple devices would have to:
 		 *  - search PCI bus(es) omitting yellowfins alreay
 		 *    in use
@@ -530,8 +535,6 @@ rtems_yellowfin_driver_attach(struct rtems_bsdnet_ifconfig *config, int attach)
 		 *    (uaarrgh...)
 		 */
 		return 0;
-	} else {
-		unit = 0;
 	}
 
 	printk("Yellowfin: A Packet Engines G-NIC ethernet driver for RTEMS\n\n");
@@ -544,7 +547,7 @@ rtems_yellowfin_driver_attach(struct rtems_bsdnet_ifconfig *config, int attach)
 	for (i=0; pci_id_tbl[i].name; i++) {
 		if (0==BSP_pciFindDevice(pci_id_tbl[i].vendor,
 					   pci_id_tbl[i].device,
-					   0, /* instance - NOTE: currently unimplemented */
+					   unit - 1, /* instance - NOTE: currently unimplemented */
 					   &pciB,
 					   &pciD,
 					   &pciF))
@@ -589,7 +592,7 @@ rtems_yellowfin_driver_attach(struct rtems_bsdnet_ifconfig *config, int attach)
 		if (yellowfin_debug>0)
 			printk(" using MAC addr from device:");
 #else
-		BSP_YELLOWFIN_SUPPLY_HWADDR(hwaddr,unit);
+		BSP_YELLOWFIN_SUPPLY_HWADDR(hwaddr,unit-1);
 #endif
 	}
 	for (i = 0; i < ETHER_ADDR_LEN-1; i++)
@@ -637,20 +640,11 @@ rtems_yellowfin_driver_attach(struct rtems_bsdnet_ifconfig *config, int attach)
 		np->duplex_lock = 1;
 
 	ifp->if_softc = np;
-	{
+
 	/* set this interface's name and unit */
-	char *cp;
-	for (cp=config->name; *cp; cp++)
-	       if (*cp>='0' && *cp<='9') break;
-	if ('0'!=*cp || 0==(i=(cp-config->name)))
-		rtems_panic("yellowfin: invalid interface name (only unit 0 supported)");
 	ifp->if_unit = unit;
-	ifp->if_name = rtems_bsdnet_malloc(i+1, M_FREE, M_NOWAIT);
-	if (!ifp->if_name)
-			rtems_panic("Yellowfin: out of memory");
-	strncpy(ifp->if_name, config->name, i);
-	ifp->if_name[i]=0;
-	}
+	ifp->if_name = name;
+
 	ifp->if_mtu = config->mtu ? config->mtu : ETHERMTU;
 
 	/* The Yellowfin-specific entries in the device structure. */

@@ -2,21 +2,21 @@
 ## $Id$
 ##
 
-AUTOMAKE_OPTIONS = foreign 1.4
-
 VPATH = @srcdir@:@srcdir@/../console:@srcdir@/../../shared/vectors
 
 C_FILES = vectors_init.c exceptionhandler.c
-C_O_FILES = $(C_FILES:%.c=$(ARCH)/%.o)
+C_O_FILES = $(C_FILES:%.c=$(ARCH)/%.$(OBJEXT))
 
 H_FILES = ../../shared/vectors/vectors.h bspException.h
 
+include_bspdir = $(includedir)/bsp
+include_bsp_HEADERS = ../../shared/vectors/vectors.h bspException.h
+
 S_FILES = vectors.S
-S_O_FILES = $(S_FILES:%.S=$(ARCH)/%.o)
+S_O_FILES = $(S_FILES:%.S=$(ARCH)/%.$(OBJEXT))
 
 OBJS = $(S_O_FILES) $(C_O_FILES)
 
-include $(RTEMS_ROOT)/make/custom/@RTEMS_BSP@.cfg
 include $(top_srcdir)/../../../../../../automake/compile.am
 include $(top_srcdir)/../../../../../../automake/lib.am
 
@@ -38,7 +38,9 @@ $(PROJECT_INCLUDE)/bsp/vectors.h: ../../shared/vectors/vectors.h
 $(PROJECT_INCLUDE)/bsp/bspException.h: bspException.h
 	$(INSTALL_DATA) $< $@
 
-PREINSTALL_FILES = $(PROJECT_INCLUDE)/bsp $(PROJECT_INCLUDE)/bsp/vectors.h $(PROJECT_INCLUDE)/bsp/bspException.h
+PREINSTALL_FILES = $(PROJECT_INCLUDE)/bsp
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/vectors.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/bspException.h
 
 all-local: $(ARCH) $(PREINSTALL_FILES) $(OBJS)
 

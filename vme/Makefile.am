@@ -2,19 +2,24 @@
 ## $Id$
 ##
 
-AUTOMAKE_OPTIONS = foreign 1.4
-
 VPATH = @srcdir@:@srcdir@/../../shared/vme:@srcdir@/../../../shared/vmeUniverse:
 
-H_FILES = ../pci/pci.h ../irq/irq.h ../vme/bspVME.h ../vme/bspVMEConfig.h
+H_FILES = ../pci/pci.h ../irq/irq.h ../vme/VME.h ../vme/VMEConfig.h
 
 C_FILES = vmeUniverse.c vmeconfig.c
-C_O_FILES = $(C_FILES:%.c=$(ARCH)/%.o)
+
+
+C_O_FILES = $(C_FILES:%.c=$(ARCH)/%.$(OBJEXT))
 
 OBJS = $(C_O_FILES)
 
-$(PROJECT_INCLUDE):
-	$(mkinstalldirs) $@
+include $(top_srcdir)/../../../../../../automake/compile.am
+include $(top_srcdir)/../../../../../../automake/lib.am
+
+include_bspdir = $(includedir)/bsp
+include_bsp_HEADERS = VMEConfig.h
+include_bsp_HEADERS += ../../shared/vme/VME.h
+include_bsp_HEADERS += ../../../shared/vmeUniverse/vmeUniverse.h
 
 $(PROJECT_INCLUDE)/bsp:
 	$(mkinstalldirs) $@
@@ -22,29 +27,22 @@ $(PROJECT_INCLUDE)/bsp:
 $(PROJECT_INCLUDE)/bsp/vmeUniverse.h: vmeUniverse.h
 	$(INSTALL_DATA) $< $@
 
-$(PROJECT_INCLUDE)/bsp/VME.h: bspVME.h
+$(PROJECT_INCLUDE)/bsp/VME.h: VME.h
 	$(INSTALL_DATA) $< $@
 
-$(PROJECT_INCLUDE)/bsp/VMEConfig.h: bspVMEConfig.h
+$(PROJECT_INCLUDE)/bsp/VMEConfig.h: VMEConfig.h
 	$(INSTALL_DATA) $< $@
 
-all-local: $(TMPINSTALL_FILES) $(ARCH) $(OBJS)
+PREINSTALL_FILES = $(PROJECT_INCLUDE)/bsp
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/VME.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/VMEConfig.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/vmeUniverse.h
 
-include $(RTEMS_ROOT)/make/custom/@RTEMS_BSP@.cfg
-include $(top_srcdir)/../../../../../../automake/force-preinstall.am
-include $(top_srcdir)/../../../../../../automake/compile.am
-include $(top_srcdir)/../../../../../../automake/lib.am
+all-local: $(PREINSTALL_FILES) $(ARCH) $(OBJS)
 
 #
 # (OPTIONAL) Add local stuff here using +=
 #
-
-PREINSTALL_FILES += $(PROJECT_INCLUDE) $(PROJECT_INCLUDE)/bsp \
-    $(PROJECT_INCLUDE)/bsp/vmeUniverse.h $(PROJECT_INCLUDE)/bsp/VME.h \
-	$(PROJECT_INCLUDE)/bsp/VMEConfig.h
-
 EXTRA_DIST = vmeconfig.c
-
-all-local: $(ARCH) $(OBJS)
 
 include $(top_srcdir)/../../../../../../automake/local.am

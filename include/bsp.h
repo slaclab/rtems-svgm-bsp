@@ -99,7 +99,7 @@ extern int BSP_connect_clock_handler (void);
 extern char *BSP_build_date;
 
 /* this is misleading, it's actually the first interface's name */
-#define RTEMS_BSP_NETWORK_DRIVER_NAME	"es0"
+#define RTEMS_BSP_NETWORK_DRIVER_NAME	"es1"
 #define RTEMS_BSP_NETWORK_DRIVER_ATTACH	rtems_yellowfin_driver_attach
 /* don't use a full prototype here - it produces warnings when this file
  * is included from files that don't include networking headers...

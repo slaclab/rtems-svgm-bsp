@@ -6,6 +6,7 @@
  */
 
 #include <libcpu/io.h>
+#include <libcpu/spr.h>
 #include <bsp/pci.h>
 #include <bsp.h>
 #include <rtems/bspIo.h> /* printk */
@@ -45,19 +46,7 @@ extern pci_config_access_functions pci_indirect_functions;
 
 #define HID0_MCP_ENABLE			0x80000000
 
-static inline unsigned long
-MFHID0(void)
-{
-unsigned long rval;
-__asm__ __volatile__("mfspr %0, %1":"=r"(rval):"i"(HID0));
-return rval;
-}
-
-static inline void
-MTHID0(unsigned long val)
-{
-__asm__ __volatile__("mtspr %0, %1"::"i"(HID0),"r"(val));
-}
+SPR_RW(HID0)
 
 /* clear all error flags adhering to the algorithm
  * recommended by motorola - MPC106 user's manual
@@ -72,7 +61,7 @@ unsigned long
 _BSP_clear_hostbridge_errors(int enableMCP, int quiet)
 {
 unsigned long	rval;
-unsigned long	picr1;
+unsigned int	picr1;
 unsigned char	errenR1,errdr1,errdr2;
 unsigned short	pcistat,pcistat_orig;
 int				count;
@@ -129,7 +118,6 @@ int				count;
   	}
 
 	if (ERR_STATUS_GRCKL_OK(rval) && enableMCP) {
-		unsigned long hid0;
 		/* re-enable error/MCP generation */
 		if (!quiet)
 			printk("Enabling MCP generation on hostbridge errors\n");
@@ -141,7 +129,7 @@ int				count;
 #endif
 		pci_write_config_dword(0,0,0,PICR1,picr1 | PICR1_MCP_EN);
 		/* enable MCP interrupt */
-		MTHID0(MFHID0() | HID0_MCP_ENABLE);
+		_write_HID0(_read_HID0() | HID0_MCP_ENABLE);
 	} else {
 		if (!quiet && enableMCP) {
 			printk("leaving MCP interrupt disabled\n");
@@ -157,7 +145,7 @@ void detect_host_bridge()
   /* Disable MCP interrupts at CPU level; scanning the PCI configuration space
    * will result in master-aborts.
    */
-  MTHID0(MFHID0() & ~ HID0_MCP_ENABLE);
+  _write_HID0(_read_HID0() & ~ HID0_MCP_ENABLE);
 
   /* setup the correct address configuration */
   BSP_pci_configuration.pci_config_addr = (void*)_GRACKLE_PCI_CONFIG_ADDR;

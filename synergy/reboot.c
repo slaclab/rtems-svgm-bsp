@@ -3,6 +3,8 @@
 /* VGM implementation of reboot */
 
 #include <bsp/vmeUniverse.h>
+#include <rtems/bspIo.h>
+#include <libcpu/stackTrace.h>
 #include <bspVGM.h>
 
 /* vector through a pointer for trying
@@ -20,7 +22,7 @@ void
 rtemsReboot(void)
 {
 	printk("Printing a stack trace for your convenience :-)\n");
-	BSP_printStackTrace(0);
+	CPU_print_stack();
 	/* try a watchdog reset (the board's response
 	 * to its own VME SYSRESET may be disabled
 	 * in the respective board control register

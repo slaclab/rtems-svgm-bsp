@@ -10,6 +10,7 @@
 
 #include <synergyregs.h>
 #include <bspVGM.h>
+#include <libcpu/io.h>
 
 void
 BSP_setLEDs(unsigned char val)
@@ -18,7 +19,7 @@ int i;
 SynergyVGMBoardReg ledreg = SYN_VGM_REG_CTRL_USR_LED_0;
 	for (i=0; i<8; i++,ledreg+=8,val>>=1)
 		*ledreg = val&1 ? SYN_VGM_REG_CTRL_USR_LED_ON : 0;	
-	__asm__ __volatile__("eieio");
+	eieio();
 }
 
 unsigned char

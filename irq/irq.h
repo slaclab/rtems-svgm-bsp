@@ -179,10 +179,10 @@ typedef struct {
 /*-------------------------------------------------------------------------+
 | Ignore some stuff on the SVGM
 +--------------------------------------------------------------------------*/
-#define BSP_irq_disable_at_i8259s(irqLine)
-#define BSP_irq_enable_at_i8259s(irqLine)
-#define BSP_irq_ack_at_i8259s(irqLine)
-#define BSP_irq_enabled_at_i8259s(irqLine)
+static inline int BSP_irq_disable_at_i8259s(irqLine)	{ return 0; }
+static inline int BSP_irq_enable_at_i8259s(irqLine)		{ return 0; }
+static inline int BSP_irq_ack_at_i8259s(irqLine)		{ return 0; }
+static inline int BSP_irq_enabled_at_i8259s(irqLine)	{ return 0; }
 #define i8259s_cache (*(rtems_i8259_masks *)(0))
 
 /*

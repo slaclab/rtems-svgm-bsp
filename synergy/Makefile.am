@@ -10,16 +10,17 @@ INCLUDES = -I @srcdir@/../synergy
 
 C_FILES = board.c  led.c  reboot.c  watchdog.c
 
-C_O_FILES = $(C_FILES:%.c=$(ARCH)/%.o)
+C_O_FILES = $(C_FILES:%.c=$(ARCH)/%.$(OBJEXT))
 
-H_FILES = ../synergy/bspVGM.h ../synergy/synergyregs.h
+include_bspdir = $(includedir)/bsp
+include_bsp_HEADERS = bspVGM.h
 
-EXTRA_DIST = board.c  led.c  reboot.c  watchdog.c bspVGM.h synergyregs.h
+H_FILES = bspVGM.h synergyregs.h
 
+EXTRA_DIST = board.c  led.c  reboot.c  watchdog.c
 
 OBJS = $(C_O_FILES)
 
-include $(RTEMS_ROOT)/make/custom/@RTEMS_BSP@.cfg
 include $(top_srcdir)/../../../../../../automake/compile.am
 include $(top_srcdir)/../../../../../../automake/lib.am
 

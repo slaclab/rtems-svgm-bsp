@@ -45,3 +45,9 @@ Note that the DBAT1 setup must match the host bridge
 configuration. The BSP does _not_ currently change
 the latter but relies on SMON configuring it. This
 seems to work well for the default configuration.
+
+UPDATE: (2003/1).
+The BSP now uses page tables for mapping the entire
+RAM. DBAT0 is hence free for use by the application.
+The BSP write-protects the text and read-only data
+areas of the application.

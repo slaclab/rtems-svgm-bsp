@@ -59,6 +59,7 @@ typedef volatile unsigned char * SynergyVGMBoardReg;
 #  define SYN_VGM_REG_STAT_CPU_BUS_SPEED_66			(0<<2)
 #  define SYN_VGM_REG_STAT_CPU_BUS_SPEED_83			(1<<2)
 #  define SYN_VGM_REG_STAT_CPU_BUS_SPEED_100		(2<<2)
+#  define SYN_VGM_REG_STAT_CPU_BUS_SPEED_133		(3<<2)
 #  define SYN_VGM_REG_STAT_CPU_BUS_SPEED_MSK		(3<<2)
 
 #define SYN_VGM_REG_STAT_CPU				((SynergyVGMBoardReg)0xffeffe20)

@@ -78,8 +78,8 @@
 #endif
 #endif
 
-#include <libcpu/cpu.h>
-#include "asm.h"
+#include <rtems/score/cpu.h>
+#include <asm.h>
 
 /* Note that major modifications may be needed
  * if DESTINATION_ADDR is not 0

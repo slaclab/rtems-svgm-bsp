@@ -58,20 +58,32 @@ SECTIONS
   .text      :	
   {
     *(.text)	
-    /* .gnu.warning sections are handled specially by elf32.em.  */
+ 
+    /*
+     * Special FreeBSD sysctl sections.
+     */
+    . = ALIGN (16);
+    __start_set_sysctl_set = .;
+    *(set_sysctl_*);
+    __stop_set_sysctl_set = ABSOLUTE(.);
+    *(set_domain_*);
+    *(set_pseudo_*);
+ 
+   /* .gnu.warning sections are handled specially by elf32.em.  */
     *(.gnu.warning)
     *(.gnu.linkonce.t*)
   }  > CODE
   .init			  : { _init = .; *(.init)	} >CODE
   .fini			  : { _fini = .; *(.fini)	} >CODE
-  .rodata         : { *(.rodata) *(.gnu.linkonce.r*) }	> CODE
+  .rodata         : { *(.rodata*) *(.gnu.linkonce.r*) }	> CODE
   .rodata1        : { *(.rodata1) }	> CODE
-  .sdata2         : { *(.sdata2) }	> CODE
+  .sdata2         : { *(.sdata2) *(.gnu.linkonce.s2.*)  }	> CODE
   .sbss2          : { 
-    					PROVIDE (__sbss2_start = .);
-						*(.sbss2)
-    					PROVIDE (__sbss2_end = .);
+    				PROVIDE (__sbss2_start = .);
+					  *(.sbss2) *(.gnu.linkonce.sb2.*)
+    				PROVIDE (__sbss2_end = .);
 					}	> CODE
+  .eh_frame	      : { *.(eh_frame)		} >CODE
   _etext = .;
   PROVIDE (etext = .);
   /* Adjust the address for the data segment.  We want to adjust up to
@@ -123,7 +135,7 @@ SECTIONS
   /* We want the small data sections together, so single-instruction offsets
      can access them all, and initialized data all before uninitialized, so
      we can shorten the on-disk segment size.  */
-  .sdata          : { *(.sdata) }	> CODE
+  .sdata          : { *(.sdata) *(.gnu.linkonce.s.*) }	> CODE
   _edata  =  .;
   PROVIDE (edata = .);
   .sbss      :

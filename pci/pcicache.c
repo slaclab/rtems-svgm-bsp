@@ -17,6 +17,7 @@
 #include <bsp/pci.h>
 
 #include <stdio.h>
+#include <string.h>
 
 typedef struct PCICacheDevNodeRec_ *PCICacheDevNode;
 

@@ -37,6 +37,7 @@
 #include <libcpu/bat.h>
 #include <libcpu/page.h>
 #include <libcpu/pte121.h>
+#include <libcpu/cpuIdent.h>
 
 #include <bsp/vectors.h>
 #include <bsp/VME.h>
@@ -139,6 +140,7 @@ int									__BSP_wrap_rtems_bsdnet_loopattach();
 #define L2CR_L2BYP		(1<<13)			/* bypass */
 #define L2CR_L2IP		(1<<0)			/* invalidate in progress */
 
+SPR_RW(DABR)
 
 extern unsigned long __rtems_end;
 extern void		L1_caches_enables();
@@ -205,10 +207,12 @@ void _BSP_Fatal_error(unsigned int v)
  *            1 break on load
  */
 void
-BSPsetDABR(void *addr, int flags)
+BSP_set_DABR(void *addr, int flags)
 {
 	printk("BSP: setting breakpoint at 0x%08x\n",addr);
-	__asm__ __volatile__("sync; mtspr 1013, %0; isync"::"r"((((long)addr)&~7) | (flags & 7)));
+	__asm__ __volatile__("sync");
+	_write_DABR((((long)addr)&~7) | (flags & 7));
+	__asm__ __volatile__("isync");
 }
 
 /*
@@ -702,9 +706,10 @@ void bsp_start( void )
 				BSP_bus_frequency = 83333333; break;
 		  case SYN_VGM_REG_STAT_CPU_BUS_SPEED_100:
 				BSP_bus_frequency = 100000000; break;
+		  case SYN_VGM_REG_STAT_CPU_BUS_SPEED_133:
+				BSP_bus_frequency = 133333333; break;
   } 
-  BSP_processor_frequency	= 366000000; /* TODO */
-#warning Need to implement CPU speed timing
+  BSP_processor_frequency	= BSP_getCpuClock(BSP_bus_frequency);
   BSP_time_base_divisor		= 4000; /* 750 and 7400 clock the TB / DECR at 1/4 of the CPU speed */
   BSPBaseBaud				= 9600*156; /* TODO, found by experiment */
   
@@ -720,7 +725,6 @@ void bsp_start( void )
   _BSP_clear_hostbridge_errors(0/*enableMCP*/,1/*quiet*/);
   _BSP_clear_hostbridge_errors(0/*enableMCP*/,1/*quiet*/);
   _BSP_clear_hostbridge_errors(1/*enableMCP*/,0/*quiet*/);
-  BSPsetDABR(0x04000000,7);
 
   /* Allocate and set up the page table mappings.
    * This is done in an extra file giving applications
@@ -787,36 +791,3 @@ void bsp_start( void )
   BSP_vme_config();
 
 }
-
-/* Keep this code around in case we want to provide a useful
- * implementation some day...
- */
-#if 0
-/* 4/11/2002: well - i added setdbat(0) now to libcpu, TS */
-  /* setdbat() doesn't allow to change bat0, we have to do it directly :-(
-   * setdbat(0, 0x01000000, 0x01000000, 0x01000000, _PAGE_RW);
-   */
-setdbat0()
-{
-	unsigned long dbat0l,dbat0h;
-	dbat0l = 0x01000000 | 2;
-/*           ^ phys[0:14] ^ RW access [30:31], RO is 1 */
-	dbat0h = 0x01000000 | (((0x01000000 >> 17) -1) << 2) | 2;
-/*           ^ virt[0:14]    ^ size --> mask               ^ SUP USER [30:31] */
-  __asm__ __volatile__(
-			"mr	%%r3, %0\n"	/* make sure values are in registers before we tamper with the BATs */
-			"mr	%%r4, %1\n"
-			"sync; isync\n"
-			"li %%r0, 0\n"
-			"mtspr %3, %%r0\n" /* switch off */
-			"mtspr %2, %%r0\n"
-			"sync; isync\n"
-			"mtspr %2, %%r3\n"
-			"mtspr %3, %%r4\n"
-			"sync; isync\n"
-			::"r"(dbat0l),"r"(dbat0h),"i"(DBAT0L),"i"(DBAT0U)
-			:"r0","r3","r4");
-}
-#endif
-
-/* BOOTP / boot parameter related routines */

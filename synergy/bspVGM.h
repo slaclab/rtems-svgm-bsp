@@ -12,6 +12,16 @@
 const unsigned char *
 BSP_boardType(void);
 
+/* Try to determine the CPU clock frequency for this board.
+ * (Needs a 'bus frequency' argument; you may supply
+ * the BSP_bus_frequency global variable after it has
+ * been initialized [bspstart.c]).
+ *
+ * RETURNS: CPU clock (in Hz) or -1 if unknown or unsupported
+ */
+unsigned long
+BSP_getCpuClock(unsigned long busFrequency);
+
 /* LED Support */
 
 /* Set the 8 user LEDs to reflect 'val'

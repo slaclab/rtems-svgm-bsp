@@ -2,31 +2,35 @@
 ## $Id$
 ##
 
-AUTOMAKE_OPTIONS = foreign 1.4
-
 VPATH = @srcdir@:@srcdir@/../../shared/irq
 
 C_FILES = irq_init.c irq.c
-C_O_FILES = $(C_FILES:%.c=$(ARCH)/%.o)
+C_O_FILES = $(C_FILES:%.c=$(ARCH)/%.$(OBJEXT))
 
-# FIXME: this does give any sense here
+
+include_bspdir = $(includedir)/bsp
+include_bsp_HEADERS = irq.h
+
 H_FILES = irq.h
 
 S_FILES = irq_asm.S
-S_O_FILES = $(S_FILES:%.S=$(ARCH)/%.o)
+S_O_FILES = $(S_FILES:%.S=$(ARCH)/%.$(OBJEXT))
 
 EXTRA_DIST = irq_init.c
 
 OBJS = $(S_O_FILES) $(C_O_FILES)
 
-include $(RTEMS_ROOT)/make/custom/@RTEMS_BSP@.cfg
 include $(top_srcdir)/../../../../../../automake/compile.am
 include $(top_srcdir)/../../../../../../automake/lib.am
 
-#
-# (OPTIONAL) Add local stuff here using +=
-#
+$(PROJECT_INCLUDE)/bsp:
+	$(mkinstalldirs) $@
 
-all-local: $(ARCH) $(OBJS)
+$(PROJECT_INCLUDE)/bsp/irq.h: irq.h
+	$(INSTALL_DATA) $< $@
+
+PREINSTALL_FILES = $(PROJECT_INCLUDE)/bsp/irq.h
+
+all-local: $(ARCH) $(PREINSTALL_FILES) $(OBJS)
 
 include $(top_srcdir)/../../../../../../automake/local.am

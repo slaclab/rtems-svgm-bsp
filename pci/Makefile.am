@@ -2,12 +2,13 @@
 ## $Id$
 ##
 
-AUTOMAKE_OPTIONS = foreign 1.4
-
 VPATH = @srcdir@:@srcdir@/../../shared/pci
 
 C_FILES = pci.c detect_grackle_bridge.c pcicache.c
-C_O_FILES = $(C_FILES:%.c=$(ARCH)/%.o)
+C_O_FILES = $(C_FILES:%.c=$(ARCH)/%.$(OBJEXT))
+
+include_bspdir = $(includedir)/bsp
+include_bsp_HEADERS = ../../shared/pci/pci.h
 
 H_FILES = ../../shared/pci/pci.h
 
@@ -15,7 +16,6 @@ EXTRA_DIST = detect_grackle_bridge.c pcicache.c
 
 OBJS = $(C_O_FILES)
 
-include $(RTEMS_ROOT)/make/custom/@RTEMS_BSP@.cfg
 include $(top_srcdir)/../../../../../../automake/compile.am
 include $(top_srcdir)/../../../../../../automake/lib.am
 
