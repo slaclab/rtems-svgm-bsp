@@ -155,6 +155,7 @@ MODULE_PARM(gx_fix, "i");
 #include <rtems.h>
 #include <bspIo.h>						/* printk */
 #include <stdio.h>						/* printf for statistics */
+#include <string.h>
 #include <bsp/irq.h>
 #include <libcpu/byteorder.h>			/* st_le32 & friends */
 #include <libcpu/io.h>					/* inp & friends */
@@ -534,11 +535,11 @@ rtems_yellowfin_driver_attach(struct rtems_bsdnet_ifconfig *config, int attach)
 		unit = 0;
 	}
 
-    printk("Yellowfin: A Packet Engines G-NIC ethernet driver for RTEMS\n\n");
+	printk("Yellowfin: A Packet Engines G-NIC ethernet driver for RTEMS\n\n");
 	printk("Copyright 1997-2001, Donald Becker <becker@scyld.com>\n");
 	printk("               2001, Till Straumann <strauman@slac.stanford.edu>\n");
 	printk("LICENSE:   This driver is released under the terms of the GPL,\n");
-    printk("           consult http://www.gnu.org for details\n");
+	printk("           consult http://www.gnu.org for details\n");
 
 	/* scan the PCI bus */
 	for (i=0; pci_id_tbl[i].name; i++) {
@@ -632,11 +633,20 @@ rtems_yellowfin_driver_attach(struct rtems_bsdnet_ifconfig *config, int attach)
 		np->duplex_lock = 1;
 
 	ifp->if_softc = np;
-	ifp->if_unit = unit + 1;
-	ifp->if_name = rtems_bsdnet_malloc(strlen(config->name)+1, M_FREE, M_NOWAIT);
+	{
+	/* set this interface's name and unit */
+	char *cp;
+	for (cp=config->name; *cp; cp++)
+	       if (*cp>='0' && *cp<='9') break;
+	if ('0'!=*cp || 0==(i=(cp-config->name)))
+		rtems_panic("yellowfin: invalid interface name (only unit 0 supported)");
+	ifp->if_unit = unit;
+	ifp->if_name = rtems_bsdnet_malloc(i+1, M_FREE, M_NOWAIT);
 	if (!ifp->if_name)
 			rtems_panic("Yellowfin: out of memory");
-	strcpy(ifp->if_name, config->name);
+	strncpy(ifp->if_name, config->name, i);
+	ifp->if_name[i]=0;
+	}
 	ifp->if_mtu = config->mtu ? config->mtu : ETHERMTU;
 
 	/* The Yellowfin-specific entries in the device structure. */
