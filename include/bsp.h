@@ -93,13 +93,17 @@
 	((localaddr)+_VME_DRAM_OFFSET)
 
 /* interrupt handlers and levels */
-typedef void (*BSP_VME_ISR_t)(unsigned long vector, void *usrArg);
+typedef void (*BSP_VME_ISR_t)(void *usrArg, unsigned long vector);
 
 #define BSP_installVME_isr(vector, handler, arg) \
 	vmeUniverseInstallISR(vector, handler, arg)
 
 #define BSP_removeVME_isr(vector, handler, arg) \
 	vmeUniverseRemoveISR(vector, handler, arg)
+
+/* retrieve the currently installed ISR for a given vector */
+#define BSP_getVME_isr(vector, parg) \
+    vmeUniverseISRGet(vector, parg)
 
 #define BSP_enableVME_int_lvl(level) \
 	vmeUniverseIntEnable(level)
