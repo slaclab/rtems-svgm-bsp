@@ -16,9 +16,14 @@ static char *boot_use_bootp=0;
 static char	*boot_my_ip=0;
 static char	*boot_my_netmask=0;
 
+#define boot_cmdline BSP_commandline_string
+
 static ParmRec parmList[]={
 	{ "BP_FILE=",  &boot_filename,
 			FLAG_MAND,
+	},
+	{ "BP_PARM=",  &boot_cmdline,
+			0,
 	},
 	{ "BP_SRVR=",  &boot_srvname,
 			FLAG_MAND,

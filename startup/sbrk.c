@@ -15,6 +15,9 @@
  *  add more memory. Loading modules may fail at that point, hence
  *  the user is expected to load all modules at startup _prior_
  *  to malloc()ing lots of memory...
+ *
+ *  NOTE: it would probably be better to have a separate region
+ *        for module code.
  */
 
 #include <rtems.h>

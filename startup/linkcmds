@@ -219,6 +219,10 @@ __BSP_wrap_rtems_bsdnet_bootp_boot_file_name =
 	DEFINED(rtems_bsdnet_bootp_boot_file_name) ?
 		rtems_bsdnet_bootp_boot_file_name
 		: 0 ;
+__BSP_wrap_rtems_bsdnet_bootp_cmdline =
+	DEFINED(rtems_bsdnet_bootp_cmdline) ?
+		rtems_bsdnet_bootp_cmdline
+		: 0 ;
 __BSP_wrap_rtems_bsdnet_bootp_server_address =
 	DEFINED(rtems_bsdnet_bootp_server_address) ?
 		rtems_bsdnet_bootp_server_address

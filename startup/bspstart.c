@@ -54,8 +54,19 @@
 /* there is no public Workspace_Free() variant :-( */
 #include <rtems/score/wkspace.h>
 
-void _BSP_pciCacheInit();
-unsigned long _BSP_clear_hostbridge_errors();
+/* a couple of declarations we have no header for :-( */
+void
+_BSP_pciCacheInit();
+
+unsigned long
+_BSP_clear_hostbridge_errors();
+
+rtems_unsigned32
+_bsp_sbrk_init(rtems_unsigned32 heap_start, rtems_unsigned32 *heap_size_p);
+
+
+/* provide access to the command line parameters */
+char *BSP_commandline_string = 0;
 
 #define USE_BOOTP_STUFF
 
@@ -83,6 +94,7 @@ static void fillin_srvrandfile(void);
  * (global namespace :-()
  */
 extern char   						*__BSP_wrap_rtems_bsdnet_bootp_boot_file_name;
+extern char   						*__BSP_wrap_rtems_bsdnet_bootp_cmdline;
 extern struct in_addr				__BSP_wrap_rtems_bsdnet_bootp_server_address;
 extern struct rtems_bsdnet_config	__BSP_wrap_rtems_bsdnet_config;
 void								__BSP_wrap_rtems_bsdnet_do_bootp();
@@ -90,6 +102,7 @@ int									__BSP_wrap_inet_pton();
 int									__BSP_wrap_rtems_bsdnet_loopattach();
 
 #define bootp_file					__BSP_wrap_rtems_bsdnet_bootp_boot_file_name
+#define bootp_cmdline				__BSP_wrap_rtems_bsdnet_bootp_cmdline
 #define bootp_srvr					__BSP_wrap_rtems_bsdnet_bootp_server_address
 #define net_config					__BSP_wrap_rtems_bsdnet_config
 #define do_bootp					__BSP_wrap_rtems_bsdnet_do_bootp
@@ -101,7 +114,6 @@ int									__BSP_wrap_rtems_bsdnet_loopattach();
  * copied from the bootloader
  */
 #include "bootpstuff.c"
-
 #endif
 
 #undef   SHOW_MORE_INIT_SETTINGS
@@ -251,7 +263,7 @@ BSP_UartBreakCbRec cb;
  *      not yet initialized.
  *
  */
- 
+
 void bsp_pretasking_hook(void)
 {
     rtems_unsigned32        heap_start=heapStart();    
@@ -288,44 +300,72 @@ void bsp_pretasking_hook(void)
 
 	/* put the commandline parameters into the environment */
 	if (buf) {
-			char		*beg,*end;
-			extern int	putenv();
-			for (beg=buf; beg; beg=end) {
-					/* skip whitespace */
-					while (' '==*beg) {
-							if (!*++beg) {
-								/* end of string reached; bail out */
-								goto done;
-							}
-					}
-					end=strchr(beg,' ');
-					if (end) *(end++)=0;
 #ifdef USE_BOOTP_STUFF
-					/* save special bootloader strings to our private environment
-					 * and pass on the others
-					 */
-					for (p=parmList; p->name; p++) {
-						if (!p->pval) continue;
-						if (strstr(beg,p->name)) {
-							/* found this one; since 'name' contains a '=' strchr will succeed */
-							char *s=strchr(beg,'=')+1;
+		char		*beg,*end;
+		for (beg=buf; beg; beg=end) {
+			/* skip whitespace */
+			while (' '==*beg) {
+				if (!*++beg) {
+					/* end of string reached; bail out */
+					goto done;
+				}
+			}
+			/* simple algorithm to find the end of quoted 'name=quoted'
+			 * substrings. As a side effect, quotes are removed from
+			 * the value.
+			 */
+			if ( (end = strchr(beg,'=')) ) {
+				if ('\'' == *++end) {
+					/* end points to the 1st char after '=' which is a '\'' */
 
-							/* p->pval might point into the
-							 * network configuration which is invalid
-							 * if we have no networking
+					char *dst = end++;
+
+					/* end points to 1st char after '\'' */
+
+					while ('\'' != *end || '\'' == *++end) {
+						if ( 0 == (*dst++=*end++) ) {
+							/* NO TERMINATING QUOTE FOUND
+							 * (for a properly quoted string we
+							 * should never get here)
 							 */
-							if (&net_config) {
-								*p->pval=malloc(strlen(s)+1);
-								strcpy(*p->pval,s);
-							}
+							end = 0;
+							dst--;
 							break;
 						}
 					}
-					if (!p->name)
-#endif
-						/* add string to environment */
-						putenv(beg);
+					*dst = 0;
+				} else {
+					/* first space terminates non-quoted strings */
+					if ( (end = strchr(end,' ')) )
+						*(end++)=0;
+				}
 			}
+			/* save special bootloader strings to our private environment
+			 * and pass on the others
+			 */
+			for (p=parmList; p->name; p++) {
+				if (!p->pval) continue;
+				if (0 == strncmp(beg,p->name,strlen(p->name))) {
+					/* found this one; since 'name' contains a '=' strchr will succeed */
+					char *s=strchr(beg,'=')+1;
+
+					/* p->pval might point into the
+					 * network configuration which is invalid
+					 * if we have no networking
+					 */
+					if (&net_config) {
+						*p->pval=malloc(strlen(s)+1);
+						strcpy(*p->pval,s);
+					}
+					break;
+				}
+			}
+			/* unfound name=value pairs are dropped to the floor */
+		}
+#else
+		BSP_commandline_string = strdup(buf);
+#endif
+
 		done:
 			_Workspace_Free(buf);
 	}
@@ -399,10 +439,16 @@ fillin_srvrandfile(void)
 		}
 	}
 	if (boot_filename) {
-		/* Ha - they changed the file name */
-		bootp_file=boot_filename;
+		/* Ha - they manually changed the file name and the parameters */
+		bootp_file    = boot_filename;
 		/* (dont bother freeing the old one - we don't really know if its malloced */
-		boot_filename=0;
+		boot_filename = 0;
+	}
+	if (boot_cmdline) {
+		/* comments for boot_filename apply here as well */
+		bootp_cmdline = boot_cmdline;
+	} else {
+		boot_cmdline  = bootp_cmdline;
 	}
 }
 /* if the bootloader loaded a different file
