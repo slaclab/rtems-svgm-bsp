@@ -8,8 +8,8 @@
 
 /* Chose debugging options */
 #undef  DEBUG_MAIN	/* create a standalone (host) program for basic testing */
-#define DEBUG		/* target debugging and consistency checking */
-#define DEBUG_EXC	/* add exception handler which reenables BAT0 and recovers from a page fault */
+#undef  DEBUG		/* target debugging and consistency checking */
+#undef  DEBUG_EXC	/* add exception handler which reenables BAT0 and recovers from a page fault */
 
 #ifdef	DEBUG_MAIN
 #undef	DEBUG		/* must not use these together with DEBUG_MAIN */
