@@ -1,0 +1,515 @@
+# Makefile.in generated automatically by automake 1.5 from Makefile.am.
+
+# Copyright 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001
+# Free Software Foundation, Inc.
+# This Makefile.in is free software; the Free Software Foundation
+# gives unlimited permission to copy and/or distribute it,
+# with or without modifications, as long as this notice is preserved.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY, to the extent permitted by law; without
+# even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+# PARTICULAR PURPOSE.
+
+@SET_MAKE@
+
+
+
+
+
+SHELL = @SHELL@
+
+srcdir = @srcdir@
+top_srcdir = @top_srcdir@
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+
+bindir = @bindir@
+sbindir = @sbindir@
+libexecdir = @libexecdir@
+datadir = @datadir@
+sysconfdir = @sysconfdir@
+sharedstatedir = @sharedstatedir@
+localstatedir = @localstatedir@
+libdir = @libdir@
+infodir = @infodir@
+mandir = @mandir@
+includedir = @includedir@
+oldincludedir = /usr/include
+pkgdatadir = $(datadir)/@PACKAGE@
+pkglibdir = $(libdir)/@PACKAGE@
+pkgincludedir = $(includedir)/@PACKAGE@
+top_builddir = ..
+
+ACLOCAL = @ACLOCAL@
+AUTOCONF = @AUTOCONF@
+AUTOMAKE = @AUTOMAKE@
+AUTOHEADER = @AUTOHEADER@
+
+INSTALL = @INSTALL@
+INSTALL_PROGRAM = @INSTALL_PROGRAM@
+INSTALL_DATA = @INSTALL_DATA@
+INSTALL_SCRIPT = @INSTALL_SCRIPT@
+INSTALL_HEADER = $(INSTALL_DATA)
+transform = @program_transform_name@
+NORMAL_INSTALL = :
+PRE_INSTALL = :
+POST_INSTALL = :
+NORMAL_UNINSTALL = :
+PRE_UNINSTALL = :
+POST_UNINSTALL = :
+host_alias = @host_alias@
+host_triplet = @host@
+AMTAR = @AMTAR@
+AWK = @AWK@
+BARE_CPU_CFLAGS = @BARE_CPU_CFLAGS@
+BARE_CPU_MODEL = @BARE_CPU_MODEL@
+DEPDIR = @DEPDIR@
+ENDIF = @ENDIF@
+EXEEXT = @EXEEXT@
+GCCSED = @GCCSED@
+GCC_SPECS = @GCC_SPECS@
+HAS_NETWORKING = @HAS_NETWORKING@
+INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
+MAINT = @MAINT@
+MAKE = @MAKE@
+OBJEXT = @OBJEXT@
+PACKAGE = @PACKAGE@
+PACKHEX = @PACKHEX@
+PROJECT_INCLUDE = @PROJECT_INCLUDE@
+PROJECT_RELEASE = @PROJECT_RELEASE@
+PROJECT_ROOT = @PROJECT_ROOT@
+PROJECT_TOPdir = @PROJECT_TOPdir@
+RTEMS_BSP = @RTEMS_BSP@
+RTEMS_BSP_FAMILY = @RTEMS_BSP_FAMILY@
+RTEMS_BSP_SPECS = @RTEMS_BSP_SPECS@
+RTEMS_CPU = @RTEMS_CPU@
+RTEMS_CPU_MODEL = @RTEMS_CPU_MODEL@
+RTEMS_HAS_NETWORKING = @RTEMS_HAS_NETWORKING@
+RTEMS_HOST = @RTEMS_HOST@
+RTEMS_LIBC_DIR = @RTEMS_LIBC_DIR@
+RTEMS_ROOT = @RTEMS_ROOT@
+RTEMS_TOPdir = @RTEMS_TOPdir@
+RTEMS_USE_GCC272 = @RTEMS_USE_GCC272@
+VERSION = @VERSION@
+am__include = @am__include@
+am__quote = @am__quote@
+exceptions = @exceptions@
+install_sh = @install_sh@
+
+VPATH = @srcdir@/../../../shared/vmeUniverse:
+
+AS = $(CC)
+ASFLAGS = $(CPU_ASFLAGS) $(CPU_CFLAGS) $(XASFLAGS)
+
+CC = @CC@ $(GCCSPECS)
+CPP = @CPP@ $(GCCSPECS)
+
+AUTOMAKE_OPTIONS = foreign 1.4
+
+H_FILES = ../pci/pci.h ../irq/irq.h
+
+C_FILES = vmeUniverse.c
+C_O_FILES = $(C_FILES:%.c=$(ARCH)/%.o)
+
+OBJS = $(C_O_FILES)
+
+PREINSTALL_FILES = $(TMPINSTALL_FILES)
+
+@RTEMS_USE_GCC_TRUE@CFLAGS_DEFAULT = -g -Wall
+
+@RTEMS_USE_GCC272_TRUE@@RTEMS_USE_GCC_TRUE@RTEMS_CPPFLAGS = -isystem $(PROJECT_INCLUDE)
+
+# default location of Standard C Library
+@RTEMS_USE_GCC272_TRUE@@RTEMS_USE_GCC_TRUE@LIBC_LIBC = `$(CC) $(CPU_CFLAGS) -print-file-name=libc.a $(GCCSED)`
+@RTEMS_USE_GCC272_TRUE@@RTEMS_USE_GCC_TRUE@LIBC_LIBM = `$(CC) $(CPU_CFLAGS) -print-file-name=libm.a $(GCCSED)`
+@RTEMS_USE_GCC272_TRUE@@RTEMS_USE_GCC_TRUE@LIBC_LIBGCC = `$(CC) $(CPU_CFLAGS) -print-libgcc-file-name $(GCCSED)`
+
+### FIXME: False if using multilibbed RTEMS
+@RTEMS_USE_GCC272_TRUE@@RTEMS_USE_GCC_TRUE@LINK_LIBS_RTEMS = $(PROJECT_RELEASE)/lib/librtemsbsp$(LIBSUFFIX_VA) \
+@RTEMS_USE_GCC272_TRUE@@RTEMS_USE_GCC_TRUE@   $(PROJECT_RELEASE)/lib/librtemscpu$(LIBSUFFIX_VA)
+
+
+@RTEMS_USE_GCC272_TRUE@@RTEMS_USE_GCC_TRUE@LINK_LIBS_GCC272 = $(LINK_LIBS_RTEMS) $(LIBC_LIBC) $(LIBC_LIBGCC)
+@RTEMS_USE_GCC272_FALSE@@RTEMS_USE_GCC_TRUE@GCCSPECS = $(GCC_SPECS) $(RTEMS_BSP_SPECS)
+@RTEMS_USE_GCC272_TRUE@@RTEMS_USE_GCC_TRUE@GCCSPECS = 
+
+DEFS = @DEFS@
+
+CPPFLAGS = @CPPFLAGS@ $(CPU_DEFINES) \
+   $(DEFINES) $(XCPPFLAGS) $(CPPFLAGS_GCC)
+
+CFLAGS = $(CFLAGS_DEFAULT) $(CPU_CFLAGS) $(XCFLAGS)
+CXXFLAGS = $(CFLAGS_DEFAULT) $(CPU_CFLAGS) $(XCXXFLAGS)
+
+LINK_LIBS = $(LINK_LIBS_GCC272) $(LD_LIBS)
+
+# when debugging, optimize flag: typically empty
+# some compilers do allow optimization with their "-g"
+CFLAGS_DEBUG_OPTIMIZE_V = -g
+CXXFLAGS_DEBUG_OPTIMIZE_V = -g
+LDFLAGS_DEBUG_V = 
+
+# profile flag; use gprof(1)
+CFLAGS_PROFILE_V = -pg
+CXXFLAGS_PROFILE_V = -pg
+LDFLAGS_PROFILE_V = 
+
+# List of library paths without -L
+LD_PATHS = $(PROJECT_RELEASE)/lib
+
+# ld flag for incomplete link
+LDFLAGS_INCOMPLETE = -r
+
+# ld flags for profiling, debugging
+LDFLAGS = $(LDFLAGS_PROFILE) $(LDFLAGS_DEBUG) $(LD_PATHS:%=-L %)
+
+
+#
+# Client compiler and support tools
+#
+
+#
+# How to compile stuff into ${ARCH} subdirectory
+#
+COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
+	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
+
+CCLD = $(CC)
+LINK = $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
+        $(AM_LDFLAGS) $(LDFLAGS) -o $@
+
+
+CXXCOMPILE = $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) \
+	$(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS)
+
+CXXLD = $(CXX)
+CXXLINK = $(CXXLD) $(AM_CXXFLAGS) $(CXXFLAGS) \
+	$(AM_LDFLAGS) $(LDFLAGS) -o $@
+
+ASCOMPILE = $(AS) $(AM_ASFLAGS) $(ASFLAGS)
+
+
+# Dependency files for use by gmake
+# NOTE: we don't put them into $(ARCH)
+#       so that 'make clean' doesn't blow it away
+DEPEND = Depends-${ARCH}
+
+CLEAN_DEPEND = $(DEPEND).tmp
+CLOBBER_DEPEND = $(DEPEND)
+
+
+# spell out all the LINK_FILE's, rather than using -lbsp, so
+#  that $(LINK_FILES) can be a dependency
+LINK_OBJS = \
+    $(OBJS) \
+    $(MANAGERS_NOT_WANTED:%=$(PROJECT_RELEASE)/lib/no-%$(LIB_VARIANT).rel)
+
+
+LINK_FILES = \
+    $(START_FILE) \
+    $(OBJS) \
+    $(MANAGERS_NOT_WANTED:%=$(PROJECT_RELEASE)/lib/no-%$(LIB_VARIANT).rel)
+
+
+VARIANT = OPTIMIZE
+
+VARIANT_OPTIMIZE_V = OPTIMIZE
+VARIANT_DEBUG_V = DEBUG
+VARIANT_PROFILE_V = PROFILE
+VARIANT_optimize_V = OPTIMIZE
+VARIANT_debug_V = DEBUG
+VARIANT_profile_V = PROFILE
+
+VARIANT_V = $(VARIANT_$(VARIANT)_V)
+
+ARCH_OPTIMIZE_V = o-optimize
+ARCH_DEBUG_V = o-debug
+ARCH_PROFILE_V = o-profile
+
+ARCH__V = $(ARCH_OPTIMIZE_V)
+ARCH = $(ARCH_$(VARIANT_V)_V)
+
+LIBSUFFIX_OPTIMIZE_V = 
+LIBSUFFIX_DEBUG_V = _g
+LIBSUFFIX_PROFILE_V = _p
+LIBSUFFIX__V = $(LIBSUFFIX_OPTIMIZE_V)
+
+LIB_VARIANT = $(LIBSUFFIX_$(VARIANT_V)_V)
+LIBSUFFIX_VA = $(LIB_VARIANT).a
+
+CFLAGS__V = $(CFLAGS_OPTIMIZE_V)
+
+@RTEMS_USE_GCC272_FALSE@@RTEMS_USE_GCC_TRUE@RTEMS_CFLAGS_OPTIMIZE_V = 
+@RTEMS_USE_GCC272_TRUE@@RTEMS_USE_GCC_TRUE@RTEMS_CFLAGS_OPTIMIZE_V = 
+@RTEMS_USE_GCC272_FALSE@@RTEMS_USE_GCC_TRUE@RTEMS_CFLAGS_DEBUG_V = -qrtems_debug -Wno-unused
+@RTEMS_USE_GCC272_TRUE@@RTEMS_USE_GCC_TRUE@RTEMS_CFLAGS_DEBUG_V = -Wno-unused
+@RTEMS_USE_GCC272_FALSE@@RTEMS_USE_GCC_TRUE@RTEMS_CFLAGS_PROFILE_V = 
+@RTEMS_USE_GCC272_TRUE@@RTEMS_USE_GCC_TRUE@RTEMS_CFLAGS_PROFILE_V = 
+RTEMS_CFLAGS__V = $(RTEMS_CFLAGS_OPTIMIZE_V)
+CXX = @CXX@ $(GCCSPECS)
+
+LD = @LD@
+OBJCOPY = @OBJCOPY@
+NM = @NM@
+SIZE = @SIZE@
+STRIP = @STRIP@
+
+AM_CPPFLAGS = $(RTEMS_CPPFLAGS)
+
+AM_CFLAGS = $(RTEMS_CFLAGS_$(VARIANT_V)_V) $(CFLAGS_$(VARIANT_V)_V)
+AM_CXXFLAGS = $(RTEMS_CFLAGS_$(VARIANT_V)_V) $(CFLAGS_$(VARIANT_V)_V)
+
+AR = @AR@
+RANLIB = @RANLIB@
+
+ARFLAGS = ruv
+
+
+#
+# (OPTIONAL) Add local stuff here using +=
+#
+TMPINSTALL_FILES = $(PROJECT_RELEASE)/lib$(MULTISUBDIR) $(PROJECT_INCLUDE) $(PROJECT_INCLUDE)/bsp \
+    $(PROJECT_INCLUDE)/bsp/vmeUniverse.h
+
+
+PROJECT_TOOLS = $(PROJECT_RELEASE)/build-tools
+subdir = vme
+mkinstalldirs = $(SHELL) $(top_srcdir)/../../../../../../mkinstalldirs
+CONFIG_HEADER = $(top_builddir)/include/bspopts.h
+CONFIG_CLEAN_FILES =
+DIST_SOURCES =
+DIST_COMMON = Makefile.am Makefile.in
+all: all-am
+
+.SUFFIXES:
+$(srcdir)/Makefile.in: @MAINTAINER_MODE_TRUE@ Makefile.am $(top_srcdir)/../../../../../../automake/force-preinstall.am $(top_srcdir)/../../../../../../automake/compile.am $(top_srcdir)/../../../../../../automake/lib.am $(top_srcdir)/../../../../../../automake/local.am $(top_srcdir)/configure.ac $(ACLOCAL_M4)
+	cd $(top_srcdir) && \
+	  $(AUTOMAKE) --foreign  vme/Makefile
+Makefile: @MAINTAINER_MODE_TRUE@ $(srcdir)/Makefile.in  $(top_builddir)/config.status
+	cd $(top_builddir) && \
+	  CONFIG_HEADERS= CONFIG_LINKS= \
+	  CONFIG_FILES=$(subdir)/$@ $(SHELL) ./config.status
+uninstall-info-am:
+tags: TAGS
+TAGS:
+
+
+DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
+
+top_distdir = ..
+distdir = $(top_distdir)/$(PACKAGE)-$(VERSION)
+
+distdir: $(DISTFILES)
+	@for file in $(DISTFILES); do \
+	  if test -f $$file; then d=.; else d=$(srcdir); fi; \
+	  dir=`echo "$$file" | sed -e 's,/[^/]*$$,,'`; \
+	  if test "$$dir" != "$$file" && test "$$dir" != "."; then \
+	    $(mkinstalldirs) "$(distdir)/$$dir"; \
+	  fi; \
+	  if test -d $$d/$$file; then \
+	    cp -pR $$d/$$file $(distdir) \
+	    || exit 1; \
+	  else \
+	    test -f $(distdir)/$$file \
+	    || cp -p $$d/$$file $(distdir)/$$file \
+	    || exit 1; \
+	  fi; \
+	done
+check-am: all-am
+check: check-am
+all-am: Makefile all-local
+
+installdirs:
+
+install: install-am
+install-exec: install-exec-am
+install-data: install-data-am
+uninstall: uninstall-am
+
+install-am: all-am
+	@$(MAKE) $(AM_MAKEFLAGS) install-exec-am install-data-am
+
+installcheck: installcheck-am
+install-strip:
+	$(MAKE) $(AM_MAKEFLAGS) INSTALL_PROGRAM="$(INSTALL_STRIP_PROGRAM)" \
+	  `test -z '$(STRIP)' || \
+	    echo "INSTALL_PROGRAM_ENV=STRIPPROG='$(STRIP)'"` install
+mostlyclean-generic:
+
+clean-generic:
+
+distclean-generic:
+	-rm -f Makefile $(CONFIG_CLEAN_FILES) stamp-h stamp-h[0-9]*
+
+maintainer-clean-generic:
+	@echo "This command is intended for maintainers to use"
+	@echo "it deletes files that may require special tools to rebuild."
+clean: clean-am
+
+clean-am: clean-generic clean-local mostlyclean-am
+
+distclean: distclean-am
+
+distclean-am: clean-am distclean-generic distclean-local
+
+dvi: dvi-am
+
+dvi-am:
+
+info: info-am
+
+info-am:
+
+install-data-am:
+
+install-exec-am:
+
+install-info: install-info-am
+
+install-man:
+
+installcheck-am:
+
+maintainer-clean: maintainer-clean-am
+
+maintainer-clean-am: distclean-am maintainer-clean-generic
+
+mostlyclean: mostlyclean-am
+
+mostlyclean-am: mostlyclean-generic
+
+uninstall-am: uninstall-info-am
+
+.PHONY: all all-am all-local check check-am clean clean-generic \
+	clean-local distclean distclean-generic distclean-local distdir \
+	dvi dvi-am info info-am install install-am install-data \
+	install-data-am install-exec install-exec-am install-info \
+	install-info-am install-man install-strip installcheck \
+	installcheck-am installdirs maintainer-clean \
+	maintainer-clean-generic mostlyclean mostlyclean-generic \
+	uninstall uninstall-am uninstall-info-am
+
+
+$(PROJECT_INCLUDE):
+	$(mkinstalldirs) $@
+
+$(PROJECT_INCLUDE)/bsp:
+	$(mkinstalldirs) $@
+
+$(PROJECT_INCLUDE)/bsp/vmeUniverse.h: vmeUniverse.h
+	$(INSTALL_DATA) $< $@
+
+all-local: $(TMPINSTALL_FILES) $(ARCH) $(OBJS)
+
+include $(RTEMS_ROOT)/make/custom/@RTEMS_BSP@.cfg
+@RTEMS_USE_GCC_FALSE@include $(CONFIG.CC)
+
+${ARCH}/%.o: %.c
+	${COMPILE} -o $@ -c $<
+
+${ARCH}/%.o: %.cc
+	${CXXCOMPILE} -o $@ -c $<
+
+${ARCH}/%.o: %.cpp
+	${CXXCOMPILE} -o $@ -c $<
+
+${ARCH}/%.o: %.cxx
+	${CXXCOMPILE} -o $@ -c $<
+
+${ARCH}/%.o: %.C
+	${CXXCOMPILE} -o $@ -c $<
+
+${ARCH}/%.o: %.S
+	${ASCOMPILE} -DASM -o $@ -c $<
+
+# Make foo.rel from foo.o
+${ARCH}/%.rel: ${ARCH}/%.o
+	${make-rel}
+
+# create $(ARCH)/pgm from pgm.sh
+${ARCH}/%: %.sh
+	$(RM) $@
+	$(CP) $< $@
+	$(CHMOD) +x $@
+
+# We deliberately don't have anything depend on the
+# $(DEPEND) file; otherwise it will get rebuilt even
+# on 'make clean'
+#
+
+depend-am: $(C_FILES) $(CC_FILES) $(S_FILES)
+	$(COMPILE) -M   $^    |  \
+	sed -e 's?^\(.*\)\.o[ ]*:?$$(ARCH)/\1.o:?' \
+	    -e 's?$(ARCH)/?$$(ARCH)/?'   >$(DEPEND).tmp
+	mv $(DEPEND).tmp $(DEPEND)
+depend: depend-am
+
+# pull in dependencies if they exist  
+ifeq (${DEPEND},$(wildcard ${DEPEND}))
+include ${DEPEND}
+@ENDIF@
+
+# FIXME: Do we want this? Only useful below tests/.
+#    $(PROJECT_RELEASE)/lib$(MULTISUBDIR)/librtemcpu$(LIBSUFFIX_VA)
+#    $(PROJECT_RELEASE)/lib/librtembsp$(LIBSUFFIX_VA)
+
+@RTEMS_USE_GCC272_TRUE@@RTEMS_USE_GCC_TRUE@define make-rel
+@RTEMS_USE_GCC272_TRUE@@RTEMS_USE_GCC_TRUE@	$(LINK) -nostdlib -Wl,-r $(XLDFLAGS) $^
+@RTEMS_USE_GCC272_TRUE@@RTEMS_USE_GCC_TRUE@endef
+@RTEMS_USE_GCC272_FALSE@@RTEMS_USE_GCC_TRUE@define make-rel
+@RTEMS_USE_GCC272_FALSE@@RTEMS_USE_GCC_TRUE@	$(LINK) -qnolinkcmds -nostdlib -Wl,-r $(XLDFLAGS) $^
+@RTEMS_USE_GCC272_FALSE@@RTEMS_USE_GCC_TRUE@endef
+@RTEMS_USE_GCC_FALSE@define make-rel
+@RTEMS_USE_GCC_FALSE@	$(LINK) $(XLDFLAGS) $^
+@RTEMS_USE_GCC_FALSE@endef
+
+define make-library
+$(RM) $@
+$(AR) $(ARFLAGS) $@ $^
+$(RANLIB) $@
+endef
+
+$(PROJECT_RELEASE)/lib$(MULTISUBDIR):
+	@$(mkinstalldirs) $@
+
+.PRECIOUS: $(LIB)
+
+all-local: $(ARCH) $(OBJS)
+
+debug:
+	@echo
+	@echo "\"make debug\" is obsolete, instead use:"
+	@echo "	make VARIANT=DEBUG"
+	@echo
+
+.PHONY: debug
+
+profile:
+	@echo
+	@echo "\"make profile\" is obsolete, instead use:"
+	@echo "	make VARIANT=PROFILE"
+	@echo
+
+.PHONY: profile
+
+preinstall-am: $(PREINSTALL_FILES)
+preinstall: preinstall-am
+.PHONY: preinstall preinstall-am
+
+depend-am:
+depend: depend-am
+.PHONY: depend depend-am
+
+${ARCH}:
+	mkdir ${ARCH}
+
+clean-local:
+	$(RM) -r o-optimize o-debug o-profile $(CLEANDIRS)
+	$(RM) Depends-o-optimize.tmp Depends-o-debug.tmp Depends-o-profile.tmp
+
+distclean-local:
+	$(RM) Depends-o-optimize Depends-o-debug Depends-o-profile
+# Tell versions [3.59,3.63) of GNU make to not export all variables.
+# Otherwise a system limit (for SysV at least) may be exceeded.
+.NOEXPORT:
