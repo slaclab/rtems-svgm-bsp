@@ -21,11 +21,11 @@
 /* these should not be defined in libcpu/io.h! */
 #warning "TODO: fix _IO_BASE & friends hack..."
 /* change definitions for CHRP / SVGM */
-#undef _IO_BASE
+#undef	_IO_BASE
 #define _IO_BASE 0xfe000000
-#undef _ISA_MEM_BASE
+#undef	_ISA_MEM_BASE
 #define _ISA_MEM_BASE 0
-#undef PCI_DRAM_OFFSET
+#undef	PCI_DRAM_OFFSET
 #define PCI_DRAM_OFFSET 0	/* start of our ram seen from the PCI bus */
 
 /*
@@ -41,8 +41,8 @@
 #define BSP_UART_IOBASE_COM1	(0xffeffb08)
 #define BSP_UART_IOBASE_COM2	(0xffeffb00)
 
-#define BSP_CONSOLE_PORT	BSP_UART_COM1
-#define BSP_UART_BAUD_BASE	115200
+#define BSP_CONSOLE_PORT		BSP_UART_COM1
+#define BSP_UART_BAUD_BASE		115200
 
 #include <bsp/openpic.h>
 
@@ -50,6 +50,7 @@
 
 
 #ifndef ASM
+/* drivers should not use these anyway */
 #define outport_byte(port,value)
 #define outport_word(port,value)
 #define outport_long(port,value)
@@ -63,7 +64,7 @@
  */
 extern unsigned int BSP_mem_size;
 /*
- * PCI Bus Frequency
+ * PPC Bus Frequency
  */
 extern unsigned int BSP_bus_frequency;
 /*
