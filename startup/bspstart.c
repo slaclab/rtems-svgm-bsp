@@ -36,7 +36,6 @@
 extern void _return_to_ppcbug();
 extern unsigned long __rtems_end;
 extern unsigned long _end;
-extern unsigned long __bss_start;
 extern void L1_caches_enables();
 extern unsigned get_L2CR();
 extern void set_L2CR(unsigned);
@@ -84,7 +83,18 @@ void _BSP_Fatal_error(unsigned int v)
   printk("%s PANIC ERROR %x\n",_RTEMS_version, v);
   __asm__ __volatile ("sc"); 
 }
- 
+
+/* flags are: 4 BT (must be MSR[DR])
+ *            2 break on store
+ *            1 break on load
+ */
+void
+BSPsetDABR(void *addr, int flags)
+{
+	printk("BSP: setting breakpoint at 0x%08x\n",addr);
+	__asm__ __volatile__("sync; mtspr 1013, %0; isync"::"r"((((long)addr)&~7) | flags & 7));
+}
+
 /*
  *  The original table from the application and our copy of it with
  *  some changes.
@@ -142,6 +152,8 @@ void bsp_pretasking_hook(void)
 
 void zero_bss()
 {
+  extern unsigned long __bss_start, __sbss_start, __sbss_end;
+  memset(&__sbss_start, 0, ((unsigned) (&__sbss_end)) - ((unsigned) &__sbss_start));
   memset(&__bss_start, 0, ((unsigned) (&__rtems_end)) - ((unsigned) &__bss_start));
 }
 
@@ -162,6 +174,8 @@ volatile unsigned char *ledreg=(volatile unsigned char*)0xffeffe80;
 	__asm__ __volatile__("eieio");
 }
 
+#define BPNT 0xffd4
+
 /*
  *  bsp_start
  *
@@ -170,14 +184,17 @@ volatile unsigned char *ledreg=(volatile unsigned char*)0xffeffe80;
 
 void bsp_start( void )
 {
-  int err;
+  int err,bpval;
   unsigned char *stack;
+  unsigned long *r1sp;
   unsigned l2cr;
   register unsigned char* intrStack;
   register unsigned int intrNestingLevel = 0;
   unsigned char *work_space_start;
   ppc_cpu_id_t myCpu;
   ppc_cpu_revision_t myCpuRevision;
+
+  bpval=*(int*)BPNT;
   /*
    * Get CPU identification dynamically. Note that the get_ppc_cpu_type() function
    * store the result in global variables so that it can be used latter...
@@ -189,6 +206,7 @@ void bsp_start( void )
    * Access to board registers and PCI devices.
    */
   setdbat(1, 0xf0000000, 0xf0000000, 0x10000000, IO_PAGE);
+
 
   /*
    * enables L1 Cache. Note that the L1_caches_enables() codes checks for
@@ -215,6 +233,11 @@ void bsp_start( void )
  /* tag the bottom (T. Straumann 6/36/2001 <strauman@slac.stanford.edu>) */
   *((unsigned32 *)stack) = 0;
 
+  /* fill stack with pattern for debugging */
+  __asm__ __volatile__("mr %0, %%r1":"=r"(r1sp));
+  while (--r1sp >= (unsigned long*)&__rtems_end)
+	  *r1sp=0xeeeeeeee;
+
   /*
    * Initialize the interrupt related settings
    * SPRG0 = interrupt nesting level count
@@ -227,6 +250,10 @@ void bsp_start( void )
 
  /* tag the bottom (T. Straumann 6/36/2001 <strauman@slac.stanford.edu>) */
   *((unsigned32 *)intrStack) = 0;
+  /* fill interrupt stack with pattern for debugging */
+  r1sp=(unsigned long*)intrStack;
+  while (--r1sp >= (unsigned long*)( intrStack - (INTR_STACK_SIZE - 8)))
+	  *r1sp=0xeeeeeeee;
 
   asm volatile ("mtspr	273, %0" : "=r" (intrStack) : "0" (intrStack));
   asm volatile ("mtspr	272, %0" : "=r" (intrNestingLevel) : "0" (intrNestingLevel));
@@ -234,23 +261,25 @@ void bsp_start( void )
    * Initialize default raw exception hanlders. See vectors/vectors_init.c
    */
   initialize_exceptions();
+  BSPsetDABR(BPNT, 0x6);
+
+#if 0
   /*
    * Init MMU block address translation to enable hardware
    * access
    */
-#if 1
   /*
    * PC legacy IO space used for inb/outb and all PC
    * compatible hardware
    */
   setdbat(3, 0x80000000, 0x80000000, 0x10000000, IO_PAGE);
-#endif
   /*
    * PCI devices memory area. Needed to access OPENPIC features
    * provided by the RAVEN
    */
   /* T. Straumann: give more PCI address space */
   setdbat(2, 0xc0000000, 0xc0000000, 0x10000000, IO_PAGE);
+#endif
    select_console(CONSOLE_LOG);
 
   /* We check that the keyboard is present and immediately 
@@ -301,8 +330,12 @@ void bsp_start( void )
   __asm__ __volatile ("sc");
 #endif  
 
-
-  BSP_mem_size 				= 0x1000000; /* TODO */
+#undef DEBUG_PROTECT_TEXT
+#ifdef DEBUG_PROTECT_TEXT
+  BSP_mem_size 				= 0x80000;
+#else
+  BSP_mem_size 				= 0x1000000;  /*TODO */
+#endif
   BSP_bus_frequency			= 66000000; /* TODO */
   BSP_processor_frequency		= 366000000; /* TODO */
   BSP_time_base_divisor			= 4000; /* TODO */
@@ -322,7 +355,7 @@ void bsp_start( void )
   Cpu_table.exceptions_in_RAM 	 = TRUE;
 
 #ifdef SHOW_MORE_INIT_SETTINGS
-  printk("BSP_Configuration.work_space_size = %x\n", BSP_Configuration.work_space_size);
+/*  printk("BSP_Configuration.work_space_size = %x\n", BSP_Configuration.work_space_size); */
 #endif  
   work_space_start = 
     (unsigned char *)BSP_mem_size - BSP_Configuration.work_space_size;
@@ -336,9 +369,38 @@ void bsp_start( void )
 
   /*
    * Initalize RTEMS IRQ system
-   */
+   */ 
+
   BSP_rtems_irq_mng_init(0);
+#ifdef DEBUG_PROTECT_TEXT
+  /* restrict the dbats to the second 256k chunk of memory */
+  printk("protecting 1st 256k from data access\n");
+  { unsigned long msr_dr,dbat0l,dbat0h,dabr;
+	  msr_dr = MSR_DR;
+	  dbat0h=0x00040006; /* 256k chunk starting at 0x00040000 (256k) */
+	  dbat0l=0x00040002; /* RW permissions, 1:1 virt/phys mapping */
+  	__asm__ __volatile__(
+			"sync; isync\n"
+			"mfmsr %%r10\n"
+			"andc  %%r10, %%r10, %0\n"
+			"mtmsr %%r10\n"	/* switch of DMMU */
+			"sync; isync\n"
+			"mtspr %1,%2\n"
+			"mtspr %3,%4\n"
+			"sync; isync\n"
+			"or    %%r10, %%r10, %0\n"
+			"mtmsr %%r10\n"
+			"sync; isync\n"
+			::"r"(msr_dr),"i"(DBAT0L),"r"(dbat0l),"i"(DBAT0U),"r"(dbat0h):"r10");
+  }
+#endif
 #ifdef SHOW_MORE_INIT_SETTINGS
-  printk("Exit from bspstart\n");
+  printk("*BPNT is 0x%08x\n",bpval);
+  /* printk("Exit from bspstart 0x%08x\n",*(unsigned long*)(0xffe4)); */
 #endif  
+  /* CRASH:
+   * BSP_panic @ 0x58c8, 0x58b8, 0x58bc, 0x58a8
+   * NO CRASH:
+   * BSP_panic @
+   */
 }

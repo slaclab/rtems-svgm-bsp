@@ -11,10 +11,15 @@ MEMORY {
 }
 SECTIONS
 {
-  .entry_point_section :
+  /* discard the 'shared/vector.S' entry point section */
+  /DISCARD/ :
   {
-	*(.entry_point_section)
-  } > VECTORS
+ 	*(.entry_point_section)
+  }
+  .svgm_preloader_section :
+  {
+	*(.svgm_preloader_section)
+   } > VECTORS
 
   /*
    * This section is used only if NO_DYNAMIC_EXCEPTION_VECTOR_INSTALL
