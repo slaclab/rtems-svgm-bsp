@@ -19,6 +19,8 @@ void (*__BSP_alternate_reset)(void)=0;
 void
 rtemsReboot(void)
 {
+	printk("Printing a stack trace for your convenience :-)\n");
+	BSP_printStackTrace(0);
 	/* try a watchdog reset (the board's response
 	 * to its own VME SYSRESET may be disabled
 	 * in the respective board control register
