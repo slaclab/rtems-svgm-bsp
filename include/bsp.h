@@ -85,6 +85,8 @@ extern void rtemsReboot(void);
 extern int BSP_disconnect_clock_handler (void);
 extern int BSP_connect_clock_handler (void);
 
+extern char *BSP_build_date;
+
 /* this is misleading, it's actually the first interface's name */
 #define RTEMS_BSP_NETWORK_DRIVER_NAME	"es0"
 #define RTEMS_BSP_NETWORK_DRIVER_ATTACH	rtems_yellowfin_driver_attach

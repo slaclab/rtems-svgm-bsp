@@ -9,8 +9,11 @@ VPATH = @srcdir@:@srcdir@/../console:@srcdir@/../../../shared:@srcdir@/../../sha
 INCLUDES = -I @srcdir@/../synergy
 
 C_FILES = bootcard.c main.c bspstart.c bsppost.c bsplibc.c sbrk.c bspclean.c \
-    gnatinstallhandler.c vmeconfig.c pte121.c pgtbl_setup.c pgtbl_activate.c
+    gnatinstallhandler.c vmeconfig.c pte121.c pgtbl_setup.c pgtbl_activate.c build_date.c
 C_O_FILES = $(C_FILES:%.c=$(ARCH)/%.o)
+
+build_date.c::
+	echo 'char *BSP_build_date="'`date`'";' > $@
 
 OBJS = $(C_O_FILES)
 
