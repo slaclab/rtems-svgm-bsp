@@ -42,6 +42,7 @@
 #include <bsp/VME.h>
 #include <bsp/bspVGM.h>
 #include <synergyregs.h>
+#include <libcpu/pte121.h>
 
 /* for RTEMS_VERSION :-( I dont like the preassembled string */
 #include <rtems/sptables.h>
