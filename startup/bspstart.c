@@ -35,28 +35,51 @@
 #include <libcpu/bat.h>
 #include <libcpu/page.h>
 
-/* bat valid bits */
-#define  BAT_VS 2
-#define  BAT_VP 1
-
 #include <bsp/vectors.h>
 #include <bsp/VME.h>
 #include <bsp/bspVGM.h>
 #include <synergyregs.h>
-#include <pte121.h>
+#include "pte121.h"
 
 #ifdef __RTEMS_APPLICATION__
 #undef __RTEMS_APPLICATION__
 #endif
+
 /* there is no public Workspace_Free() variant :-( */
 #include <rtems/score/wkspace.h>
+
+#define  SHOW_MORE_INIT_SETTINGS
+
+/* missing bits... */
+
+/* bat valid bits */
+#define  BAT_VS 2
+#define  BAT_VP 1
+
+/* L2CR bits */
+#define L2CR_L2E		(1<<31)			/* enable */
+#define L2CR_L2PE		(1<<30)			/* parity enable */
+#define L2CR_L2SIZ(a)	(((a)&3)<<28)	/* size: 0=2MB, 3=1MB */
+#define L2CR_L2CLK(a)	(((a)&7)<<25)	/* clock speed  1=1:1, 2=1:1.5, 4=2:1, 5=2:5, 6=3:1 */
+#define L2CR_L2RAM(a)	(((a)&3)<<23)	/* 3=pipelined sync, late-write */	
+#define L2CR_L2DO		(1<<22)			/* data only */
+#define L2CR_L2I		(1<<21)			/* global invalidate */
+#define L2CR_L2CTL		(1<<20)			/* ZZ enable */
+#define L2CR_L2WT		(1<<19)			/* write through */
+#define L2CR_L2TS		(1<<18)			/* test mode */
+#define L2CR_L2OH(a)	(((a)&3)<<16)	/* output hold; 0=0.5ns, 1=1ns */
+#define L2CR_L2SL		(1<<15)			/* slow */
+#define L2CR_L2DF		(1<<14)			/* differential clock */
+#define L2CR_L2BYP		(1<<13)			/* bypass */
+#define L2CR_L2IP		(1<<0)			/* invalidate in progress */
+
 
 extern void _return_to_ppcbug();
 extern unsigned long __rtems_end;
 extern unsigned long _end;
 extern void L1_caches_enables();
 extern unsigned get_L2CR();
-extern void set_L2CR(unsigned);
+extern unsigned set_L2CR(unsigned);
 extern void bsp_cleanup(void);
 
 typedef struct CmdLineRec_ {
@@ -64,7 +87,6 @@ typedef struct CmdLineRec_ {
 		char			buf[0];
 } CmdLineRec, *CmdLine;
 
-#define  SHOW_MORE_INIT_SETTINGS
 
 /*
  * Vital Board data Start using DATA RESIDUAL
@@ -305,7 +327,7 @@ void bsp_start( void )
    * Get CPU identification dynamically. Note that the get_ppc_cpu_type() function
    * store the result in global variables so that it can be used latter...
    */
-  myCpu 	= get_ppc_cpu_type();
+  myCpu 		= get_ppc_cpu_type();
   myCpuRevision = get_ppc_cpu_revision();
 
   /*
@@ -322,13 +344,37 @@ void bsp_start( void )
   /*
    * Enable L2 Cache. Note that the set_L2CR(L2CR) codes checks for
    * relevant CPU type (mpc750)...
+   *
+   * It also takes care of flushing the cache under certain conditions:
+   *   current    going to (E==enable, I==invalidate)
+   *     E           E | I	-> __NOT_FLUSHED_, invalidated, stays E
+   *     E               I	-> flush & disable, invalidate
+   *     E           E		-> nothing, stays E
+   *     0           E | I	-> not flushed, invalidated, enabled
+   *     0             | I	-> not flushed, invalidated, stays off
+   *     0           E      -> not flushed, _NO_INVALIDATE, enabled
+   *
+   * The first and the last combinations are potentially dangerous!
+   *
+   * NOTE: we assume the essential cache parameters (speed, size etc.)
+   *       have been set correctly by the SMON firmware!
+   *
    */
   l2cr = get_L2CR();
-#ifdef SHOW_LCR2_REGISTER
-  printk("Initial L2CR value = %x\n", l2cr);
-#endif  
-  if ( (! (l2cr & 0x80000000)) && ((int) l2cr == -1))
-    set_L2CR(0xb9A14000);
+  if ( -1 != (int)l2cr ) {
+	/* -1 would mean that this machine doesn't support L2 */
+
+	l2cr &= ~L2CR_L2DO; /* clear 'data only' */
+	if ( ! (l2cr & L2CR_L2E) ) {
+		/* we are going to enable the L2 - hence we
+		 * MUST invalidate it first; however, if
+		 * it was enabled already, we MUST NOT
+		 * invalidate it!!
+		 */
+		l2cr |= L2CR_L2E | L2CR_L2I;
+	}
+	l2cr=set_L2CR(l2cr);
+  }
 
   /*
    * the initial stack  has already been set to this value in start.S
@@ -398,10 +444,11 @@ void bsp_start( void )
   printk("Welcome to %s on %s\n", _RTEMS_version, chpt);
   printk("-----------------------------------------\n");
 #ifdef SHOW_MORE_INIT_SETTINGS  
-  printk("Initial system stack at %x\n",stack);
+  printk("Initial system stack at 0x%08x\n",stack);
   __asm__ __volatile__ ("mr %0, %%r1":"=r"(stack));
-  printk("(R1 stack pointer is 0x%08x)\n", stack);
-  printk("Software IRQ stack at %x\n",intrStack);
+  printk("(R1 stack pointer is    0x%08x)\n", stack);
+  printk("Software IRQ stack at   0x%08x\n",intrStack);
+  printk("Initial L2CR value is   0x%08x\n", l2cr);
   printk("-----------------------------------------\n");
 #endif
 
