@@ -41,6 +41,9 @@
 #include <synergyregs.h>
 #include "pte121.h"
 
+/* for RTEMS_VERSION :-( I dont like the preassembled string */
+#include <rtems/sptables.h>
+
 #ifdef __RTEMS_APPLICATION__
 #undef __RTEMS_APPLICATION__
 #endif
@@ -430,8 +433,9 @@ void bsp_start( void )
   }
 
   printk("-----------------------------------------\n");
-  printk("Welcome to %s on %s\n", _RTEMS_version, chpt);
-  printk("SSRL Release $Name$ / $Date$\n");
+  printk("Welcome to RTEMS RELEASE %s on %s/%s/%s\n",
+		  RTEMS_VERSION, chpt, CPU_NAME, current_ppc_cpu_name);
+  printk("SSRL Release $Name$/$Date$\n");
   printk("-----------------------------------------\n");
 #ifdef SHOW_MORE_INIT_SETTINGS  
   printk("Initial system stack at 0x%08x\n",stack);
