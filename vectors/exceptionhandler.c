@@ -57,19 +57,21 @@ int						quiet=0;
 		fmt="Aieeh, Exception %d in initialization code\n";
 	} else {
 		/* retrieve the notepad which possibly holds an extention pointer */
-		if (RTEMS_SUCCESSFUL==rtems_task_ident(RTEMS_SELF,RTEMS_LOCAL,&id) &&
+		if (RTEMS_SUCCESSFUL==rtems_task_ident(RTEMS_SELF,RTEMS_LOCAL,&id)) {
+			if (
 #if 0
 /* Must not use a notepad due to unknown initial value (notepad memory is allocated from the
  * workspace)!
  */
-		    RTEMS_SUCCESSFUL==rtems_task_get_note(id, BSP_EXCEPTION_NOTEPAD, &note)
+		    	RTEMS_SUCCESSFUL==rtems_task_get_note(id, BSP_EXCEPTION_NOTEPAD, &note)
 #else
-			RTEMS_SUCCESSFUL==rtems_task_variable_get(id, (void*)&BSP_exceptionExtension, (void**)&note)
+				RTEMS_SUCCESSFUL==rtems_task_variable_get(id, (void*)&BSP_exceptionExtension, (void**)&note)
 #endif
 			) {
-			ext = (BSP_ExceptionExtension)note;
-			if (ext)
-				quiet=ext->quiet;
+				ext = (BSP_ExceptionExtension)note;
+				if (ext)
+					quiet=ext->quiet;
+			}
 			if (!quiet) {
 				printk("Task (Id 0x%08x) got ",id);
 			}
