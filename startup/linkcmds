@@ -66,10 +66,14 @@ SECTIONS
   .fini           : { *(.fini)          } 	> CODE
   .rodata         : { *(.rodata) *(.gnu.linkonce.r*) }	> CODE
   .rodata1        : { *(.rodata1) }	> CODE
+  .sdata2         : { *(.sdata2) }	> CODE
+  .sbss2          : { 
+    					PROVIDE (__sbss2_start = .);
+						*(.sbss2)
+    					PROVIDE (__sbss2_end = .);
+					}	> CODE
   _etext = .;
   PROVIDE (etext = .);
-  .sdata2   : { *(.sdata2) }	> CODE
-  .sbss2   : { *(.sbss2) }	> CODE
   /* Adjust the address for the data segment.  We want to adjust up to
      the same address within the page on the next page up.  It would
      be more correct to do this:
@@ -84,9 +88,10 @@ SECTIONS
      important than losing a page of the virtual address space (note
      that no actual memory is lost; the page which is skipped can not
      be referenced).  */
-  . = ALIGN(0x1000);
  .data    :
   {
+  . = ALIGN(0x1000);
+	PROVIDE(__DATA_START__ = . );
     *(.data)
     *(.gnu.linkonce.d*)	
     CONSTRUCTORS
