@@ -160,13 +160,13 @@ MODULE_PARM(gx_fix, "i");
 #include <libcpu/byteorder.h>			/* st_le32 & friends */
 #include <libcpu/io.h>					/* inp & friends */
 /* TODO: fix this ugly hack */
-#ifdef _IO_BASE
-#undef _IO_BASE
-#endif
-#define _IO_BASE	0xfe000000			/* CHRP IO_BASE */
+#include <bsp.h> /* give bsp.h a chance to fix _IO_BASE, PCI_DRAM_OFFSET */
 #warning "YELLOWFIN: should fix _IO_BASE hack"
-#define virt_to_bus(addr)	((addr))	/* on CHRP :-) */
-#define bus_to_virt(addr)	((addr))	/* on CHRP :-) */
+/* our memory address seen from the PCI bus */
+#define virt_to_bus(addr)	((addr)+PCI_DRAM_OFFSET)	/* on CHRP :-) */
+/* and back... */
+#define bus_to_virt(addr)	((addr)-PCI_DRAM_OFFSET)	/* on CHRP :-) */
+
 #define le32_to_cpu(var)	ld_le32((volatile unsigned *)&var)
 #ifdef __PPC
 #define get_unaligned(addr)	(*(addr))
@@ -543,7 +543,7 @@ rtems_yellowfin_driver_attach(struct rtems_bsdnet_ifconfig *config, int attach)
 
 	/* scan the PCI bus */
 	for (i=0; pci_id_tbl[i].name; i++) {
-		if (0==bspExtPciFindDevice(pci_id_tbl[i].vendor,
+		if (0==BSP_pciFindDevice(pci_id_tbl[i].vendor,
 					   pci_id_tbl[i].device,
 					   0, /* instance - NOTE: currently unimplemented */
 					   &pciB,
