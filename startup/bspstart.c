@@ -144,6 +144,7 @@ int									__BSP_wrap_rtems_bsdnet_loopattach();
 #define L2CR_L2IP		(1<<0)			/* invalidate in progress */
 
 SPR_RW(DABR)
+SPR_RW(HID0)
 
 /* prevent this from ending up in the short data area */
 extern unsigned long __rtems_end[];
@@ -281,6 +282,7 @@ void bsp_pretasking_hook(void)
 #ifdef USE_BOOTP_STUFF
 	Parm					p;
 #endif
+
 
     heap_size = (BSP_mem_size - heap_start) - BSP_Configuration.work_space_size;
 
@@ -687,6 +689,12 @@ void bsp_start( void )
 #ifdef SHOW_MORE_INIT_SETTINGS
   printk("Going to start PCI buses scanning and initialization\n");
 #endif  
+  /* Disable MCP interrupts at CPU level; scanning the PCI configuration space
+   * will result in master-aborts.
+   */
+
+  _write_HID0(_read_HID0() & ~ HID0_EMCP);
+
   /* initialize pci driver. We just supply the SVGM's 
    * config_addr / config_data addresses here
    */
@@ -722,15 +730,16 @@ void bsp_start( void )
   /* and finally clear the hostbridge errors and enable MCP exception
    * generation. Note that config space access to non-existent devices
    * results in a master abort
-   * (call this routine only after the CPU table has been initialized;
-   * it uses rtems_bsp_delay())
    *
-   * Experience tells us that we have to repeat this step a couple
-   * of times...
+   * Call twice; once silently to avoid printing the errors
+   * caused by the PCI config space scan. The second time
+   * to inform the user that MCP/TEA interrupts will be enabled.
    */
   _BSP_clear_hostbridge_errors(0/*enableMCP*/,1/*quiet*/);
-  _BSP_clear_hostbridge_errors(0/*enableMCP*/,1/*quiet*/);
   _BSP_clear_hostbridge_errors(1/*enableMCP*/,0/*quiet*/);
+
+  /* enable MCP interrupt (TEA is always on) */
+  _write_HID0(_read_HID0() | HID0_EMCP);
 
   /* Allocate and set up the page table mappings.
    * This is done in an extra file giving applications
@@ -795,5 +804,4 @@ void bsp_start( void )
    * routine.
    */
   BSP_vme_config();
-
 }
