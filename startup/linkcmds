@@ -100,6 +100,10 @@ _SDA2_BASE_ = __SDATA2_START__ + 0x8000;
   .sbss2          : { 
     				PROVIDE (__sbss2_start = .);
 					  *(.sbss2) *(.gnu.linkonce.sb2.*)
+					  /* avoid empty sdata2/sbss2 area because __eabi wouldn't set up r2
+					   * (IMPORTANT if run-time loading is involved)
+					   */
+					  . += 1 ;
     				PROVIDE (__sbss2_end = .);
 					}	> CODE
   .eh_frame	      : { *.(eh_frame)		} >CODE
@@ -187,6 +191,10 @@ _SDA_BASE_ = __SDATA_START__ + 0x8000;
     *(.sbss)
     *(.scommon)
     *(.dynsbss)
+	/* avoid empty sdata/sbss area because __eabi wouldn't set up r13
+	 * (IMPORTANT if run-time loading is involved)
+	 */
+	. += 1 ;
     PROVIDE (__sbss_end = ABSOLUTE(.));
   } > CODE
   .plt   : { *(.plt) }	> CODE
