@@ -9,8 +9,23 @@
 #include <bsp/irq.h>
 #include <libcpu/bat.h>
 
+/* Use a weak alias for the VME configuration.
+ * This permits individual applications to override
+ * this routine.
+ * They may even create an 'empty'
+ *
+ *    void BSP_vme_config(void) {}
+ *
+ * which will avoid linking in the Universe driver
+ * at all :-).
+ */
+
+void BSP_vme_config(void) __attribute__ (( weak, alias("__VGM_default_vme_config") ));
+
+extern void (*__BSP_alternate_reset)(void);
+
 void
-BSP_vme_config(void)
+__VGM_default_vme_config(void)
 {
   vmeUniverseInit();
   vmeUniverseReset();
@@ -62,4 +77,7 @@ BSP_vme_config(void)
   if (vmeUniverse0PciIrqLine<0)
 	BSP_panic("Unable to get interrupt line info from PCI config");
   _BSP_vme_bridge_irq=BSP_PCI_IRQ_LOWEST_OFFSET+vmeUniverse0PciIrqLine;
+
+  /* install alternate resetter */
+  __BSP_alternate_reset = vmeUniverseResetBus;
 }

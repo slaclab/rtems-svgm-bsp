@@ -22,6 +22,8 @@
  */
 
 #include <string.h>
+#include <stdlib.h>
+#include <ctype.h>
 
 #include <bsp.h>
 #include <rtems/libio.h>
@@ -41,6 +43,9 @@
 #include <synergyregs.h>
 #include "pte121.h"
 
+#include <stdio.h>
+#warning TSILL
+
 /* for RTEMS_VERSION :-( I dont like the preassembled string */
 #include <rtems/sptables.h>
 
@@ -51,13 +56,63 @@
 /* there is no public Workspace_Free() variant :-( */
 #include <rtems/score/wkspace.h>
 
+#define USE_BOOTP_STUFF
+
+#ifdef  USE_BOOTP_STUFF
+
+#include <rtems/rtems_bsdnet.h>
+
+#include <sys/socket.h>
+#include <netinet/in.h>
+
+/* We'll store here what the application put into its
+ * network configuration table.
+ */
+static void (*the_apps_bootp)(void)=0;
+static void my_bootp_intercept(void);
+
+char   *__BSP_dummy_bsdnet_bootp_file_name=0;
+struct in_addr __BSP_dummy_bsdnet_bootp_server_address={0};
+struct rtems_bsdnet_config __BSP_dummy_bsdnet_config={0};
+
+/* parameter table for network setup - separate file because
+ * copied from the bootloader
+ */
+#include "bootpstuff.c"
+
+/* create weak aliases for the networking configuration
+ * table just in case the app has no network
+ * stuff linked in...
+ */
+
+extern struct rtems_bsdnet_config rtems_bsdnet_config
+__attribute__((weak, alias("__BSP_dummy_bsdnet_config") ));
+
+extern char *rtems_bsdnet_bootp_boot_file_name
+__attribute__((weak, alias("__BSP_dummy_bsdnet_bootp_file_name") ));
+
+extern struct in_addr rtems_bsdnet_bootp_server_address
+__attribute__((weak, alias("__BSP_dummy_bsdnet_bootp_server_address") ));
+
+#if 0
+/* the bootp init routine (could be that they
+ * configured _without_ bootp but the bootloader
+ * told us to use it...
+ */
+void   rtems_bsdnet_do_bootp(void)
+__attribute__ (( weak, alias("__BSP_dummy_empty_routine") ));
+
+/* Sigh... */
+int    inet_ntop()
+__attribute__ (( weak, alias("__BSP_dummy_empty_routine") ));
+#endif
+
+
+#endif
+
 #define  SHOW_MORE_INIT_SETTINGS
 
 /* missing bits... */
-
-/* bat valid bits */
-#define  BAT_VS 2
-#define  BAT_VP 1
 
 /* Reminder: useful setdbat0 code skeleton can be found at the bottom */
 
@@ -89,7 +144,6 @@ typedef struct CmdLineRec_ {
 		unsigned long	size;
 		char			buf[0];
 } CmdLineRec, *CmdLine;
-
 
 /*
  * Vital Board data obtained from VGM board registers
@@ -168,10 +222,12 @@ char *rtems_progname;
  *  Use the shared implementations of the following routines
  */
  
-void bsp_postdriver_hook(void);
-void bsp_libc_init( void *, unsigned32, int );
+void			bsp_postdriver_hook(void);
+void			bsp_libc_init( void *, unsigned32, int );
 
-void BSP_vme_config(void);
+void			BSP_vme_config(void);
+Triv121PgTbl	BSP_pgtbl_setup(unsigned int*);
+void			BSP_pgtbl_activate(Triv121PgTbl);
 
 /*
  *  Function:   bsp_pretasking_hook
@@ -193,6 +249,9 @@ void bsp_pretasking_hook(void)
 	CmdLine					cmdline=(CmdLine)heap_start;
     rtems_unsigned32        heap_size;
 	char					*buf;
+#ifdef USE_BOOTP_STUFF
+	Parm					p;
+#endif
 
     heap_size = (BSP_mem_size - heap_start) - BSP_Configuration.work_space_size;
 
@@ -217,8 +276,8 @@ void bsp_pretasking_hook(void)
 
 	/* put the commandline parameters into the environment */
 	if (buf) {
-			char *beg,*end;
-			extern int putenv();
+			char		*beg,*end;
+			extern int	putenv();
 			for (beg=buf; beg; beg=end) {
 					/* skip whitespace */
 					while (' '==*beg) {
@@ -229,17 +288,104 @@ void bsp_pretasking_hook(void)
 					}
 					end=strchr(beg,' ');
 					if (end) *(end++)=0;
-					/* add string to environment */
-					putenv(beg);
+#ifdef USE_BOOTP_STUFF
+					/* save special bootloader strings to our private environment
+					 * and pass on the others
+					 */
+					for (p=parmList; p->name; p++) {
+						if (!p->pval) continue;
+						if (strstr(beg,p->name)) {
+							/* found this one; since 'name' contains a '=' strchr will succeed */
+							char *s=strchr(beg,'=')+1;
+							*p->pval=malloc(strlen(s)+1);
+							strcpy(*p->pval,s);
+						}
+					}
+					if (!p->name)
+#endif
+						/* add string to environment */
+						putenv(beg);
 			}
 		done:
 			_Workspace_Free(buf);
 	}
 
+#ifdef USE_BOOTP_STUFF
+	/* now hack into the network configuration... */
+	if (boot_use_bootp && 'N'==toupper(*boot_use_bootp)) {
+		/* no bootp */
+printk("TSILL --- disabling BOOTP\n");
+		rtems_bsdnet_config.bootp=0;
+	} else {
+		the_apps_bootp=rtems_bsdnet_config.bootp;
+		rtems_bsdnet_config.bootp=my_bootp_intercept;
+		/* release the strings that will be set up by
+		 * bootp - bootpc relies on them being NULL
+		 */
+		for (p=parmList; p->name; p++) {
+			if (!p->pval) continue;
+			if (p->flags & FLAG_CLRBP) {
+				free(*p->pval); *p->pval=0;
+			}
+		}
+	}
+#endif
+
+
 #ifdef RTEMS_DEBUG
     rtems_debug_enable( RTEMS_DEBUG_ALL_MASK );
 #endif
 }
+
+#ifdef USE_BOOTP_STUFF
+void
+__BSP_dummy_empty_routine(void)
+{
+/* this is never called - it's just linked in
+ * by applications without networking support
+ */
+}
+
+/* if the bootloader loaded a different file
+ * than what the BOOTP/DHCP server says we have
+ * then we want to forge the respective system
+ * variables.
+ */
+static void
+my_bootp_intercept(void)
+{
+fprintf(stderr,"TSILL -- intercepting BOOTP\n");
+#ifdef TSILL
+	/* Do bootp first */
+	if (the_apps_bootp) {
+		the_apps_bootp();
+fprintf(stderr,"TSILL -- called APP BOOTP 0x%08x\n",the_apps_bootp);
+	} else {
+#ifdef TSILL
+		rtems_bsdnet_do_bootp();
+#endif
+	}
+	/* OK - now let's see what we have */
+	if (boot_srvname) {
+		/* Seems we have a different file server */
+		if (inet_ntop(AF_INET,
+					&__BSP_dummy_bsdnet_bootp_server_address,
+					boot_srvname,
+					strlen(boot_srvname))) {
+fprintf(stderr,"TSILL -- forget SERVER IP %s\n",boot_srvname);
+			rtems_bsdnet_bootp_server_address=__BSP_dummy_bsdnet_bootp_server_address;
+		}
+	}
+#endif
+	if (__BSP_dummy_bsdnet_bootp_file_name) {
+		/* Ha - they changed the file name */
+		rtems_bsdnet_bootp_boot_file_name=__BSP_dummy_bsdnet_bootp_file_name;
+fprintf(stderr,"TSILL -- forget FILENAME '%s'\n",rtems_bsdnet_bootp_boot_file_name);
+		/* (dont bother freeing the old one - we don't really know if its malloced */
+		__BSP_dummy_bsdnet_bootp_file_name=0;
+	}
+}
+#endif
 
 void zero_bss()
 {
@@ -280,7 +426,7 @@ void zero_bss()
  * from where it will be picked up by our pretasking_hook().
  * pretasking_hook() then moves it either to INIT_STACK or the workspace
  * area using proper allocation, initializes libc and finally moves
- * the data to the environment...
+ * the data to the environment / malloced areas...
  */
 
 void
@@ -320,8 +466,6 @@ void bsp_start( void )
   unsigned char				reg;
   const unsigned char		*chpt;
   Triv121PgTbl				pt;
-  unsigned long				ldPtSize;
-  unsigned long				tmp;		/* scratch var */
 
   /*
    * Get CPU identification dynamically. Note that the get_ppc_cpu_type() function
@@ -434,7 +578,7 @@ void bsp_start( void )
 
   printk("-----------------------------------------\n");
   printk("Welcome to RTEMS RELEASE %s/svgm on %s/%s/%s\n",
-		  RTEMS_VERSION, chpt, CPU_NAME, current_ppc_cpu_name);
+		  RTEMS_VERSION, chpt, CPU_NAME, get_ppc_cpu_type_name(myCpu));
   printk("SSRL Release $Name$/$Date$\n");
   printk("-----------------------------------------\n");
 #ifdef SHOW_MORE_INIT_SETTINGS  
@@ -476,62 +620,15 @@ void bsp_start( void )
   BSPBaseBaud				= 9600*156; /* TODO, found by experiment */
   
 
-#define PGTBL
-#ifdef PGTBL
-
-  /* Allocate a page table large enough to map
-   * the entire physical memory. We put the page
-   * table at the top of the physical memory.
+  /* Allocate and set up the page table mappings.
+   * This is done in an extra file giving applications
+   * a chance to override the default mappings :-)
+   *
+   * NOTE: This setup routine may modify the available memory
+   *       size. It is essential to call it before
+   *       calculating the workspace etc.
    */
-
-  /* get minimal size (log base 2) of PT for
-   * this board's memory
-   */
-  ldPtSize = triv121PgTblLdMinSize(BSP_mem_size);
-  ldPtSize++; /* double this amount -- then why? */
-
-  /* allocate the page table at the top of the physical
-   * memory
-   */
-  if ( (pt = triv121PgTblInit(BSP_mem_size - (1<<ldPtSize), ldPtSize)) ) {
-	extern unsigned long __DATA_START__, _etext;
-
-	/* map text and RO data read-only */
-	tmp = triv121PgTblMap(
-						pt,
-						TRIV121_121_VSID,
-						0,
-						(PAGE_ALIGN((unsigned long)&_etext) - 0) >> PG_SHIFT,
-						0, /* WIMG */
-						TRIV121_PP_RO_PAGE);
-	if (TRIV121_MAP_SUCCESS != tmp) {
-		printk("Unable to map page index %i; reverting to BAT0\n", 
-				tmp);
-		pt = 0;
-	} else {
-		/* map the rest (without the page table itself) RW */
-		tmp = triv121PgTblMap(
-						pt,
-						TRIV121_121_VSID,
-						(unsigned long)&__DATA_START__,
-						(BSP_mem_size - (1<<ldPtSize) -  (unsigned long)&__DATA_START__ )>> PG_SHIFT,
-						0, /* WIMG */
-						TRIV121_PP_RW_PAGE);
-		if (TRIV121_MAP_SUCCESS != tmp) {
-			printk("Unable to map page index %i; reverting to BAT0\n", 
-					tmp);
-			pt = 0;
-		}
-	}
-  } else {
-	printk("WARNING: unable to allocate page table, keeping DBAT0\n");
-  }
-  if (pt) {
-	/* SUCCESS; reduce available memory by size of the page table */
-	BSP_mem_size -= (1<<ldPtSize);
-  }
-
-#endif
+  pt = BSP_pgtbl_setup(&BSP_mem_size);
 
   /*
    * Set up our hooks
@@ -563,32 +660,16 @@ void bsp_start( void )
 
   BSP_rtems_irq_mng_init(0);
 
-#ifdef PGTBL
+  /* Activate the page table mappings only after
+   * initializing interrupts because the irq_mng_init()
+   * routine needs to modify the text
+   */
   if (pt) {
-	/* switch the text/ro sements to RO only after
-	 * initializing the interrupts because the irq_mng
-	 * installs some code...
-	 *
-	 * activate the page table; it is still masked by the
-	 * DBAT0, however
-	 */
-	triv121PgTblActivate(pt);
-
 #ifdef  SHOW_MORE_INIT_SETTINGS
-	printk("Page table setup finished; going to deactivate DBAT0...\n");
+	printk("Page table setup finished; will activate it NOW...\n");
 #endif
-	__asm__ __volatile__(
-			"mfspr %%r0, %0\n"
-			"andc  %%r0, %%r0, %1\n"
-			"sync;\n"
-			"mtspr %0, %%r0\n"
-			"sync\n"
-			::"i"(DBAT0U),"r"(BAT_VS | BAT_VP)
-			:"r0"
-	);
-	/* At this point, DBAT0 is available for other use... */
+  	BSP_pgtbl_activate(pt);
   }
-#endif
 
   /*
    * Initialize VME bridge - needs working PCI
@@ -609,6 +690,7 @@ void bsp_start( void )
  * implementation some day...
  */
 #if 0
+/* 4/11/2002: well - i added setdbat(0) now to libcpu, TS */
   /* setdbat() doesn't allow to change bat0, we have to do it directly :-(
    * setdbat(0, 0x01000000, 0x01000000, 0x01000000, _PAGE_RW);
    */
@@ -634,3 +716,5 @@ setdbat0()
 			:"r0","r3","r4");
 }
 #endif
+
+/* BOOTP / boot parameter related routines */
