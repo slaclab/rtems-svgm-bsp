@@ -2,8 +2,6 @@
 /*
 	Written 1997-2001 by Donald Becker.
 
-	RTEMS port 2001 by Till Straumann, <strauman@slac.stanford.edu>
-
 	This software may be used and distributed according to the terms of
 	the GNU General Public License (GPL), incorporated herein by reference.
 	Drivers based on or derived from this code fall under the GPL and must
@@ -23,35 +21,30 @@
 	http://www.scyld.com/network/yellowfin.html
 */
 
-/* TODO: stuff to export */
-char *yellowfin_driver_name="es";
-
-#define YELLOWFIN_DRIVER_NAME	yellowfin_driver_name
-#define YELLOWFIN_TASK_NAME		"yfin"
-
 /* These identify the driver base version and may not be removed. */
 static const char version1[] =
-"yellowfin.c:v1.07-rtems  8/2/2001  Written by Donald Becker <becker@scyld.com>, 10/16/2001 Till Straumann <strauman@slac.stanford.edu>\n";
+"yellowfin.c:v1.07  8/2/2001  Written by Donald Becker <becker@scyld.com>\n";
 static const char version2[] =
 "  http://www.scyld.com/network/yellowfin.html\n";
 
 /* The user-configurable values.
    These may be modified when a driver module is loaded.*/
 
-static int yellowfin_debug = 4;			/* 1 normal messages, 0 quiet .. 7 verbose. */
-/* Maximum events (Rx packets, etc.) to handle at each event reception. */
+static int debug = 1;			/* 1 normal messages, 0 quiet .. 7 verbose. */
+/* Maximum events (Rx packets, etc.) to handle at each interrupt. */
 static int max_interrupt_work = 20;
-#ifdef YF_PROTOTYPE						/* Support for prototype hardware errata. */
+static int mtu = 0;
+#ifdef YF_PROTOTYPE			/* Support for prototype hardware errata. */
 /* System-wide count of bogus-rx frames. */
 static int bogus_rx = 0;
-static int dma_ctrl = 0x004A0263; 		/* Constrained by errata */
-static int fifo_cfg = 0x0020;			/* Bypass external Tx FIFO. */
-#elif YF_NEW							/* A future perfect board :->.  */
-static int dma_ctrl = 0x00CAC277;		/* Override when loading module! */
+static int dma_ctrl = 0x004A0263; 			/* Constrained by errata */
+static int fifo_cfg = 0x0020;				/* Bypass external Tx FIFO. */
+#elif YF_NEW					/* A future perfect board :->.  */
+static int dma_ctrl = 0x00CAC277;			/* Override when loading module! */
 static int fifo_cfg = 0x0028;
 #else
-static int dma_ctrl = 0x004A0263; 		/* Constrained by errata */
-static int fifo_cfg = 0x0020;			/* Bypass external Tx FIFO. */
+static int dma_ctrl = 0x004A0263; 			/* Constrained by errata */
+static int fifo_cfg = 0x0020;				/* Bypass external Tx FIFO. */
 #endif
 
 /* Set the copy breakpoint for the copy-only-tiny-frames scheme.
@@ -77,20 +70,23 @@ static int gx_fix = 0;
    There are no ill effects from too-large receive rings. */
 #define TX_RING_SIZE	16
 #define TX_QUEUE_SIZE	12		/* Must be > 4 && <= TX_RING_SIZE */
-#define RX_RING_SIZE	32	/* TSILL_TODO was 64, reduced to test because RTEMS ran out of mbufs */
+#define RX_RING_SIZE	64
 
 /* Operational parameters that usually are not changed. */
 /* Time in jiffies before concluding the transmitter is hung. */
 #define TX_TIMEOUT  (2*HZ)
 #define PKT_BUF_SZ		1536			/* Size of each temporary Rx buffer.*/
 
+#define yellowfin_debug debug
+
+#ifndef __KERNEL__
+#define __KERNEL__
+#endif
 #if !defined(__OPTIMIZE__)
 #warning  You must compile this file with the correct options!
 #warning  See the last lines of the source file.
 #error You must compile this driver with "-O".
 #endif
-
-#ifdef TSILL_TODO
 
 #include <linux/config.h>
 #if defined(CONFIG_SMP) && ! defined(__SMP__)
@@ -147,67 +143,6 @@ MODULE_PARM(options, "1-" __MODULE_STRING(MAX_UNITS) "i");
 MODULE_PARM(full_duplex, "1-" __MODULE_STRING(MAX_UNITS) "i");
 MODULE_PARM(gx_fix, "i");
 
-#else /* TSILL_TODO */
-
-#ifndef KERNEL
-#define KERNEL
-#endif
-
-#include <rtems.h>
-#include <bspIo.h>
-#include <bsp/irq.h>
-#include <libcpu/byteorder.h>	/* st_le32 & friends */
-#include <libcpu/io.h>			/* inp & friends */
-/* TODO: fix this ugly hack */
-#ifdef _IO_BASE
-#undef _IO_BASE
-#endif
-#define _IO_BASE	0xfe000000	/* CHRP IO_BASE */
-#define virt_to_bus(addr)	((addr))	/* on CHRP :-) */
-#define bus_to_virt(addr)	((addr))	/* on CHRP :-) */
-#define le32_to_cpu(var)	ld_le32((volatile unsigned *)&var)
-#ifdef __PPC
-#define get_unaligned(addr)	(*(addr))
-#endif
-#include <rtems/error.h>
-#include "yf_rtemscompat.h"
-#include <bsp/pci.h>
-#include <stdlib.h>				/* malloc */
-#include <rtems/rtems_bsdnet.h>
-
-#include <sys/param.h>
-#include <sys/mbuf.h>
-
-#include <sys/socket.h>
-#include <sys/sockio.h>
-#include <net/if.h>
-#include <netinet/in.h>
-#include <netinet/if_ether.h>
-
-/* RTEMS event used by the ISR */
-#define INTERRUPT_EVENT	RTEMS_EVENT_1
-/* RTEMS event to kill the daemon */
-#define KILL_EVENT		RTEMS_EVENT_2
-
-#ifdef malloc
-#undef malloc	/* bsdnet redefines malloc to its own rtems_bsdnet_malloc
-				 * which we _dont_ want to use for allocating the drivers
-				 * private memory
-				 */
-#endif
-
-/* map pci interrupt to 'name' [the shared PPC irq interface could be better designed] */
-#define	BSP_PCIIRQ2NAME(irq) ((irq)+BSP_PCI_IRQ_LOWEST_OFFSET)
-#define	BSP_NAME2PCIIRQ(name) ((name)-BSP_PCI_IRQ_LOWEST_OFFSET)
-
-/* Condensed operations for readability. */
-#ifdef TSILL_TODO
-#define virt_to_le32desc(addr)  cpu_to_le32(virt_to_bus(addr))
-#endif
-#define le32desc_to_virt(addr)  bus_to_virt((void*)le32_to_cpu(addr))
-
-#endif
-
 /*
 				Theory of Operation
 
@@ -249,7 +184,7 @@ that we are pre-loading the cache with immediately useful header
 information).  For large frames the copying cost is non-trivial, and the
 larger copy might flush the cache of useful data.
 
-IIIC. Synchronization - Original implementation DOES NOT APPLY TO RTEMS
+IIIC. Synchronization
 
 The driver runs as two independent, single-threaded flows of control.  One
 is the send-packet routine, which enforces single-threaded use by the
@@ -265,20 +200,6 @@ The interrupt handler has exclusive control over the Rx ring and records stats
 from the Tx ring.  After reaping the stats, it marks the Tx queue entry as
 empty by incrementing the dirty_tx mark. Iff the 'yp->tx_full' flag is set, it
 clears both the tx_full and tbusy flags.
-
-IIIC-i. Synchronization - RTEMS port (Till Straumann)
-
-The driver's work is done by _one_single_ task who blocks on an event
-while it is idle. An RX or TX interrupt does not perform any work but
-simply weaks up the driver task thus keeping interrupt latencies minimal.
-
-Upon reception of an event, the driver task first passes received packets
-(possibly this involves copying packets smaller than rx_copybreak) upstream
-using 'ether_input()'. When no more packets can be received, the driver first
-cleans up TX descriptors and then proceeds dequeuing mbufs from the IF's 
-output queue into free descriptors. When no more work can be done,
-the driver goes again to sleep.
-
 
 IV. Notes
 
@@ -301,13 +222,12 @@ See Packet Engines confidential appendix (prototype chips only).
 
 
 
-
+static void *yellowfin_probe1(struct pci_dev *pdev, void *init_dev,
+							  long ioaddr, int irq, int chip_idx, int fnd_cnt);
 enum capability_flags {
 	HasMII=1, FullTxStatus=2, IsGigabit=4, HasMulticastBug=8, FullRxStatus=16,
 	HasMACAddrBug=32,			/* Only on early revs.  */
 };
-
-#ifdef TSILL_TODO
 /* The PCI I/O space extent. */
 #define YELLOWFIN_SIZE 0x100
 #ifdef USE_IO_OPS
@@ -315,24 +235,19 @@ enum capability_flags {
 #else
 #define PCI_IOTYPE (PCI_USES_MASTER | PCI_USES_MEM | PCI_ADDR1)
 #endif
-#endif
 
-struct pci_id_info {
-	char *name;
-	unsigned short	vendor, device;
-	int  drv_flags;
-};
-
-/* don't change the order of this table: table index is used as "chip_id" */
 static struct pci_id_info pci_id_tbl[] = {
-	{"Yellowfin G-NIC Gigabit Ethernet",
-	 0x1000, 0x0702,
+	{"Yellowfin G-NIC Gigabit Ethernet", { 0x07021000, 0xffffffff},
+	 PCI_IOTYPE, YELLOWFIN_SIZE,
 	 FullTxStatus | IsGigabit | HasMulticastBug | HasMACAddrBug},
-	{"Symbios SYM83C885",
-	 0x1000, 0x0701,
-	 HasMII },
+	{"Symbios SYM83C885", { 0x07011000, 0xffffffff},
+	 PCI_IOTYPE, YELLOWFIN_SIZE, HasMII },
 	{0,},
 };
+
+struct drv_id_info yellowfin_drv_id = {
+	"yellowfin", 0, PCI_CLASS_NETWORK_ETHERNET<<8, pci_id_tbl,
+	yellowfin_probe1, };
 
 /* Offsets to the Yellowfin registers.  Various sizes and alignments. */
 enum yellowfin_offsets {
@@ -397,211 +312,148 @@ struct yellowfin_private {
 	   Tx requires a second descriptor for status. */
 	struct yellowfin_desc rx_ring[RX_RING_SIZE];
 	struct yellowfin_desc tx_ring[TX_RING_SIZE*2];
-	struct yellowfin_private *next_module;
+	struct net_device *next_module;
 	void *priv_addr;					/* Unaligned address for kfree */
 	/* The addresses of receive-in-place skbuffs. */
-	struct mbuf* rx_mbuf[RX_RING_SIZE];
+	struct sk_buff* rx_skbuff[RX_RING_SIZE];
 	/* The saved address of a sent-in-place packet/buffer, for later free(). */
-	struct mbuf* tx_mbuf[TX_RING_SIZE];
+	struct sk_buff* tx_skbuff[TX_RING_SIZE];
 	struct tx_status_words tx_status[TX_RING_SIZE];
-#ifdef TSILL_TODO
 	struct timer_list timer;	/* Media selection timer. */
 	struct net_device_stats stats;
-#endif
 	/* Frequently used and paired value: keep adjacent for cache effect. */
 	int chip_id, drv_flags;
+	struct pci_dev *pci_dev;
 	long in_interrupt;
 	struct yellowfin_desc *rx_head_desc;
-	/* TODO: wraparound of the ring indices */
 	unsigned int cur_rx, dirty_rx;		/* Producer/consumer ring indices */
 	unsigned int rx_buf_sz;				/* Based on MTU+slack. */
 	struct tx_status_words *tx_tail_desc;
 	unsigned int cur_tx, dirty_tx;
 	int tx_threshold;
-	unsigned int tx_free:5;				/* free Tx queue slots. */
+	unsigned int tx_full:1;				/* The Tx queue is full. */
 	unsigned int full_duplex:1;			/* Full-duplex operation requested. */
 	unsigned int duplex_lock:1;
 	unsigned int medialock:1;			/* Do not sense media. */
+	unsigned int default_port:4;		/* Last dev->if_port value. */
 	/* MII transceiver section. */
 	int mii_cnt;						/* MII device addresses. */
 	u16 advertising;					/* NWay media advertisement */
 	unsigned char phys[2];				/* MII device addresses. */
-	long	base_addr;
-	int	irq;
-	struct	arpcom	arpcom;			/* rtems if structure, contains ifnet */
-	rtems_id	daemonTid;
-	rtems_id	daemonSync;			/* synchronization with the daemon */
-
-	/* statistics */
-	struct {
-		unsigned long	txReassembled;
-		unsigned long 	length_errors;
-		unsigned long	frame_errors;
-		unsigned long	crc_errors;
-	} stats;
 };
-
 
 static int read_eeprom(long ioaddr, int location);
 static int mdio_read(long ioaddr, int phy_id, int location);
 static void mdio_write(long ioaddr, int phy_id, int location, int value);
-static int yellowfin_ioctl(struct ifnet *ifp, int cmd, caddr_t data);
-static int yellowfin_init_hw(struct yellowfin_private *yp);
-static void yellowfin_timer(unsigned long data);
-#ifdef TSILL_TODO
-static void yellowfin_tx_timeout(struct net_device *dev);
+#ifdef HAVE_PRIVATE_IOCTL
+static int mii_ioctl(struct net_device *dev, struct ifreq *rq, int cmd);
 #endif
-static void yellowfin_init_ring(struct yellowfin_private *yp);
-static int yellowfin_sendpacket(struct mbuf *skb, struct yellowfin_private *dev);
-static int yellowfin_rx(struct yellowfin_private *dev);
-static void yellowfin_error(struct yellowfin_private *dev, int intr_status);
-static void yellowfin_stop(struct yellowfin_private *yp);
-static int yellowfin_stop_hw(struct yellowfin_private *yp);
-static void yellowfin_start(struct ifnet * ifp);
-static rtems_isr yellowfin_isr(void);
-static void yellowfin_irq_on(const rtems_irq_connect_data *);
-static void yellowfin_irq_off(const rtems_irq_connect_data *);
-static int yellowfin_irq_is_on(const rtems_irq_connect_data *);
-static void yellowfin_init(void *arg);
-static void yellowfin_daemon(void *arg);
-static void set_rx_mode(struct yellowfin_private *yp);
+static int yellowfin_open(struct net_device *dev);
+static void yellowfin_timer(unsigned long data);
+static void yellowfin_tx_timeout(struct net_device *dev);
+static void yellowfin_init_ring(struct net_device *dev);
+static int yellowfin_start_xmit(struct sk_buff *skb, struct net_device *dev);
+static void yellowfin_interrupt(int irq, void *dev_instance, struct pt_regs *regs);
+static int yellowfin_rx(struct net_device *dev);
+static void yellowfin_error(struct net_device *dev, int intr_status);
+static int yellowfin_close(struct net_device *dev);
+static struct net_device_stats *yellowfin_get_stats(struct net_device *dev);
+static void set_rx_mode(struct net_device *dev);
+
 
 
-/* A list of installed Yellowfin devices */
-static struct yellowfin_private *root_yellowfin_dev = NULL;
+/* A list of installed Yellowfin devices, for removing the driver module. */
+static struct net_device *root_yellowfin_dev = NULL;
 
-/* attach parameter tells us whether to attach or to detach the driver */
-int
-rtems_yellowfin_driver_attach(struct rtems_bsdnet_ifconfig *config, int attach)
+#ifndef MODULE
+int yellowfin_probe(struct net_device *dev)
 {
+	if (pci_drv_register(&yellowfin_drv_id, dev) < 0)
+		return -ENODEV;
+	printk(KERN_INFO "%s" KERN_INFO "%s", version1, version2);
+	return 0;
+}
+#endif
+
+static void *yellowfin_probe1(struct pci_dev *pdev, void *init_dev,
+							  long ioaddr, int irq, int chip_idx, int find_cnt)
+{
+	struct net_device *dev;
 	struct yellowfin_private *np;
-	void		*priv_mem;
-	int		i, option,unit;
-	int		drv_flags;
-	int		pciB,pciD,pciF,chip_idx;
-	unsigned long 	ioaddr;
-	unsigned char	irq, hwaddr[ETHER_ADDR_LEN];
-	struct ifnet	*ifp;
+	void *priv_mem;
+	int i, option = find_cnt < MAX_UNITS ? options[find_cnt] : 0;
+	int drv_flags = pci_id_tbl[chip_idx].drv_flags;
 
-	if (root_yellowfin_dev) {
-		rtems_panic("yellowfin: multiple devices not implemented");
-		/* support for multiple devices would have to:
-		 *  - search PCI bus(es) omitting yellowfins alreay
-		 *    in use
-		 *  - ISR would have to figure out IRQ source. This
-		 *    is complicated by the fact that RTEMS doesn't allow
-		 *    for passing an ISR argument :-( :-( :-(
-		 *    Most likely, you would have to install a _different_
-		 *    isr for each device instance, so the isr can 
-		 *    calculate the instance number from its own address
-		 *    (uaarrgh...)
-		 */
-		return 0;
-	} else {
-		unit = 0;
+	dev = init_etherdev(init_dev, 0);
+
+	printk(KERN_INFO "%s: %s type %8x at 0x%lx, ",
+		   dev->name, pci_id_tbl[chip_idx].name, inl(ioaddr + ChipRev), ioaddr);
+
+	if (drv_flags & IsGigabit)
+		for (i = 0; i < 6; i++)
+			dev->dev_addr[i] = inb(ioaddr + StnAddr + i);
+	else {
+		int ee_offset = (read_eeprom(ioaddr, 6) == 0xff ? 0x100 : 0);
+		for (i = 0; i < 6; i++)
+			dev->dev_addr[i] = read_eeprom(ioaddr, ee_offset + i);
 	}
-
-	/* scan the PCI bus */
-	for (i=0; pci_id_tbl[i].name; i++) {
-		if (0==bspExtPciFindDevice(pci_id_tbl[i].vendor,
-					   pci_id_tbl[i].device,
-					   0, /* instance - NOTE: currently unimplemented */
-					   &pciB,
-					   &pciD,
-					   &pciF))
-			break;
-	}
-
-	if ( !pci_id_tbl[i].name) {
-		printk("yellowfin_probe: NO DEVICE FOUND, giving up...\n");
-		return 0;
-	}
-	chip_idx=i;
-
-	drv_flags = pci_id_tbl[i].drv_flags;
-
-	/* get base address + interrupt */
-	pci_read_config_dword(pciB, pciD, pciF, PCI_BASE_ADDRESS_0, (void*)&ioaddr);
-	ioaddr &= PCI_BASE_ADDRESS_IO_MASK;
-
-	pci_read_config_byte(pciB, pciD, pciF, PCI_INTERRUPT_LINE, &irq);
-
-	printk("%s: %s type %8x at 0x%lx, ",
-		   YELLOWFIN_DRIVER_NAME, pci_id_tbl[i].name, inl(ioaddr + ChipRev), ioaddr);
-
-	/* try to read HW address from the device if not overridden
-	 * by config
-	 */
-	if (config->hardware_address) {
-		memcpy(hwaddr, config->hardware_address, ETHER_ADDR_LEN);
-		printk(" using MAC addr from config:");
-	} else {
-		if (drv_flags & IsGigabit)
-			for (i = 0; i < 6; i++)
-				hwaddr[i] = inb(ioaddr + StnAddr + i);
-		else {
-			int ee_offset = (read_eeprom(ioaddr, 6) == 0xff ? 0x100 : 0);
-			for (i = 0; i < 6; i++)
-				hwaddr[i] = read_eeprom(ioaddr, ee_offset + i);
-		}
-		printk(" using MAC addr from device:");
-	}
-	for (i = 0; i < ETHER_ADDR_LEN-1; i++)
-			printk("%02x:", hwaddr[i]);
-	printk("%02x, IRQ %d.\n", hwaddr[i], irq);
+	for (i = 0; i < 5; i++)
+			printk("%2.2x:", dev->dev_addr[i]);
+	printk("%2.2x, IRQ %d.\n", dev->dev_addr[i], irq);
 
 	/* Reset the chip. */
 	outl(0x80000000, ioaddr + DMACtrl);
 
 	/* Make certain elements e.g. descriptor lists are aligned. */
-	priv_mem = malloc(sizeof(*np) + PRIV_ALIGN);
+	priv_mem = kmalloc(sizeof(*np) + PRIV_ALIGN, GFP_KERNEL);
 	/* Check for the very unlikely case of no memory. */
 	if (priv_mem == NULL)
-		rtems_panic("yellowfin: OUT OF MEMORY");
+		return NULL;
 
-	np = (void *)(((long)priv_mem + PRIV_ALIGN) & ~PRIV_ALIGN);
+	/* We do a request_region() only to register /proc/ioports info. */
+	request_region(ioaddr, pci_id_tbl[chip_idx].io_size, dev->name);
+
+	dev->base_addr = ioaddr;
+	dev->irq = irq;
+
+	dev->priv = np = (void *)(((long)priv_mem + PRIV_ALIGN) & ~PRIV_ALIGN);
 	memset(np, 0, sizeof(*np));
 	np->priv_addr = priv_mem;
 
-	np->base_addr = ioaddr;
-	np->irq = irq;
-	memcpy(np->arpcom.ac_enaddr, hwaddr, ETHER_ADDR_LEN);
-
 	np->next_module = root_yellowfin_dev;
-	root_yellowfin_dev = np;
+	root_yellowfin_dev = dev;
 
+	np->pci_dev = pdev;
 	np->chip_id = chip_idx;
 	np->drv_flags = drv_flags;
 
-	ifp = &np->arpcom.ac_if;
+	if (dev->mem_start)
+		option = dev->mem_start;
 
- 	option = chip_idx < MAX_UNITS ? options[chip_idx] : 0;
 	/* The lower four bits are the media type. */
 	if (option > 0) {
 		if (option & 0x200)
 			np->full_duplex = 1;
+		np->default_port = option & 15;
+		if (np->default_port)
+			np->medialock = 1;
 	}
-	np->medialock = 0;
-	if (chip_idx < MAX_UNITS  &&  full_duplex[chip_idx] > 0)
+	if (find_cnt < MAX_UNITS  &&  full_duplex[find_cnt] > 0)
 		np->full_duplex = 1;
 
 	if (np->full_duplex)
 		np->duplex_lock = 1;
 
-	ifp->if_softc = np;
-	ifp->if_unit = unit + 1;
-	ifp->if_name = YELLOWFIN_DRIVER_NAME;
-	ifp->if_mtu = config->mtu ? config->mtu : ETHERMTU;
-
 	/* The Yellowfin-specific entries in the device structure. */
-	ifp->if_init = yellowfin_init;
-	ifp->if_ioctl = yellowfin_ioctl;
-	ifp->if_start = yellowfin_start;
-	ifp->if_output = ether_output;
+	dev->open = &yellowfin_open;
+	dev->hard_start_xmit = &yellowfin_start_xmit;
+	dev->stop = &yellowfin_close;
+	dev->get_stats = &yellowfin_get_stats;
+	dev->set_multicast_list = &set_rx_mode;
+	dev->do_ioctl = &mii_ioctl;
 
-	ifp->if_flags = IFF_BROADCAST | IFF_SIMPLEX;
-	if (ifp->if_snd.ifq_maxlen == 0)
-		ifp->if_snd.ifq_maxlen = ifqmaxlen;
+	if (mtu)
+		dev->mtu = mtu;
 
 	if (np->drv_flags & HasMII) {
 		int phy, phy_idx = 0;
@@ -610,30 +462,15 @@ rtems_yellowfin_driver_attach(struct rtems_bsdnet_ifconfig *config, int attach)
 			if (mii_status != 0xffff  &&  mii_status != 0x0000) {
 				np->phys[phy_idx++] = phy;
 				np->advertising = mdio_read(ioaddr, phy, 4);
-				printk("%s: MII PHY found at address %d, status "
-					   "0x%04x advertising 0x%04x.\n",
-					   ifp->if_name, phy, mii_status, np->advertising);
+				printk(KERN_INFO "%s: MII PHY found at address %d, status "
+					   "0x%4.4x advertising %4.4x.\n",
+					   dev->name, phy, mii_status, np->advertising);
 			}
 		}
 		np->mii_cnt = phy_idx;
 	}
 
-	/* create the synchronization semaphore */
-	if (RTEMS_SUCCESSFUL !=
-	    rtems_semaphore_create(
-				rtems_build_name('y','f','i','n'),
-				0,0,0,&np->daemonSync))
-		rtems_panic("Yellowfin: semaphore creation failed");
-
-
-	/* Actually attach the interface */
-	if_attach(ifp);
-	ether_ifattach(ifp);
-
-	printk("Yellowfin: Ethernet driver has been attached (handle 0x%08x, ifp 0x%08x)\n",
-			np, ifp);
-
-	return 1;
+	return dev;
 }
 
 static int read_eeprom(long ioaddr, int location)
@@ -677,102 +514,35 @@ static void mdio_write(long ioaddr, int phy_id, int location, int value)
 	return;
 }
 
-
-/* stupid rtems IRQ interface doesn't pass a user
- * pointer in rtems_irq_connect_data.
- * Nor does rtems support IRQ sharing...
- * we cannot even share 1 IRQ among several instances of
- * the same driver :-(
- */
-
-static void yellowfin_irq_on(const rtems_irq_connect_data *c)
-{
-	struct yellowfin_private *yp;
-	for (yp = root_yellowfin_dev; yp; yp=yp->next_module) {
-		if (c->name != BSP_PCIIRQ2NAME(yp->irq))
-			continue; /* another instance on another line */
-		/* see enum intr_status_bits */
-		outw(0x81ff, yp->base_addr + IntrEnb);
-		return;
-	}
-	rtems_panic("yellowfin_irq_on: should never get here");
-}
-
-static void yellowfin_irq_off(const rtems_irq_connect_data *c)
-{
-	struct yellowfin_private *yp;
-	for (yp = root_yellowfin_dev; yp; yp=yp->next_module) {
-		if (c->name != BSP_PCIIRQ2NAME(yp->irq))
-			continue; /* another instance on another line */
-		/* see enum intr_status_bits */
-		outw(0x0000, yp->base_addr + IntrEnb);
-		return;
-	}
-	rtems_panic("yellowfin_irq_off: should never get here");
-}
-
-static int yellowfin_irq_is_on(const rtems_irq_connect_data *c)
-{
-	struct yellowfin_private *yp;
-	/* stupid rtems IRQ interface doesn't pass a user
-	 * pointer in rtems_irq_connect_data.
-	 * Nor does rtems support IRQ sharing :-(
-	 */
-	for (yp = root_yellowfin_dev; yp; yp=yp->next_module) {
-		if (c->name != BSP_PCIIRQ2NAME(yp->irq))
-			continue; /* another instance on another line */
-		/* see enum intr_status_bits */
-		return 0x81ff & inw(yp->base_addr + IntrEnb);
-	}
-	rtems_panic("yellowfin_irq_is_on: should never get here");
-	return 0; /* keep compiler happy */
-}
-
-/* Oh well, this is really, really, STUPID
- * --> only ONE instance supported
- */
-static void yellowfin_isr(void)
-{
-	unsigned long *tsill=(void*)0x200000;
-	/* wakeup the networking task and let it do
-	 * all of the work...
-	 */
-	rtems_event_send(root_yellowfin_dev->daemonTid, INTERRUPT_EVENT);
-	*tsill=0xdeadbeef;
-	(*(tsill+1))++;
-	__asm__ __volatile__("dcbst 0, %0; sync"::"r"(tsill));	
-}
-
-rtems_irq_connect_data yellowfin_irq_info={
-name:	0,
-hdl:	yellowfin_isr,
-on:	yellowfin_irq_on,
-off:	yellowfin_irq_off,
-isOn:	yellowfin_irq_is_on,
-};
-
 
-static int yellowfin_init_hw(struct yellowfin_private *yp)
+static int yellowfin_open(struct net_device *dev)
 {
-	long ioaddr = yp->base_addr;
-	struct ifnet *ifp = &yp->arpcom.ac_if;
+	struct yellowfin_private *yp = (struct yellowfin_private *)dev->priv;
+	long ioaddr = dev->base_addr;
 	int i;
 
-	printk("Yellowfin: entering init_hw...\n");
 	/* Reset the chip. */
 	outl(0x80000000, ioaddr + DMACtrl);
 
+	MOD_INC_USE_COUNT;
+
+	if (request_irq(dev->irq, &yellowfin_interrupt, SA_SHIRQ, dev->name,
+					dev)) {
+		MOD_DEC_USE_COUNT;
+		return -EAGAIN;
+	}
+
 	if (yellowfin_debug > 1)
-		printk("%s%d: yellowfin_init_hw() irq %d.\n",
-			   ifp->if_name, ifp->if_unit, yp->irq);
+		printk(KERN_DEBUG "%s: yellowfin_open() irq %d.\n",
+			   dev->name, dev->irq);
 
-	yellowfin_init_ring(yp);
+	yellowfin_init_ring(dev);
 
-	outl((unsigned long)virt_to_bus(yp->rx_ring), ioaddr + RxPtr);
-	outl((unsigned long)virt_to_bus(yp->tx_ring), ioaddr + TxPtr);
+	outl(virt_to_bus(yp->rx_ring), ioaddr + RxPtr);
+	outl(virt_to_bus(yp->tx_ring), ioaddr + TxPtr);
 
 	for (i = 0; i < 6; i++)
-		outb(yp->arpcom.ac_enaddr[i], ioaddr + StnAddr + i);
+		outb(dev->dev_addr[i], ioaddr + StnAddr + i);
 
 	/* Set up various condition 'select' registers.
 	   There are no options here. */
@@ -793,6 +563,9 @@ static int yellowfin_init_hw(struct yellowfin_private *yp)
 	yp->tx_threshold = 32;
 	outl(yp->tx_threshold, ioaddr + TxThreshold);
 
+	if (dev->if_port == 0)
+		dev->if_port = yp->default_port;
+
 	yp->in_interrupt = 0;
 
 	/* Setting the Rx mode will start the Rx process. */
@@ -805,61 +578,30 @@ static int yellowfin_init_hw(struct yellowfin_private *yp)
 		outw(0x1018, ioaddr + FrameGap1);
 		outw(0x101C | (yp->full_duplex ? 2 : 0), ioaddr + Cnfg);
 	}
+	set_rx_mode(dev);
+	netif_start_tx_queue(dev);
 
-	set_rx_mode(yp);
-	/* connect the interrupt handler which should
-	 * take care of enabling interrupts
-	 */
-	yellowfin_irq_info.name = BSP_PCIIRQ2NAME(yp->irq);
-	if (!BSP_install_rtems_irq_handler(&yellowfin_irq_info))
-		rtems_panic("yellowfin: unable to install ISR");
-
-
+	/* Enable interrupts by setting the interrupt mask. */
+	outw(0x81ff, ioaddr + IntrEnb);			/* See enum intr_status_bits */
 	outw(0x0000, ioaddr + EventStatus);		/* Clear non-interrupting events */
 	outl(0x80008000, ioaddr + RxCtrl);		/* Start Rx and Tx channels. */
 	outl(0x80008000, ioaddr + TxCtrl);
 
 	if (yellowfin_debug > 2) {
-		printk("%s%d: Done yellowfin_init_hw().\n",
-			   ifp->if_name,ifp->if_unit);
+		printk(KERN_DEBUG "%s: Done yellowfin_open().\n",
+			   dev->name);
 	}
 
-#ifdef TSILL_TODO
 	/* Set the timer to check for link beat. */
 	init_timer(&yp->timer);
 	yp->timer.expires = jiffies + 3*HZ;
 	yp->timer.data = (unsigned long)dev;
 	yp->timer.function = &yellowfin_timer;				/* timer handler */
 	add_timer(&yp->timer);
-#endif
 
 	return 0;
 }
 
-static void yellowfin_init(void *arg)
-{
-	struct yellowfin_private *yp = arg;
-	printk("yellowfin_init(): entering... (YP: 0x%08x, daemon ID: 0x%08x)\n",
-			yp, yp->daemonTid);
-
-	if (yp->daemonTid) {
-		printk("Yellowfin: daemon already up, doing nothing\n");
-		return;
-	}
-	/* launch network daemon */
-	yp->daemonTid = rtems_bsdnet_newproc(YELLOWFIN_TASK_NAME,4096,yellowfin_daemon,arg);
-
-	/* wait for the daemon to start up */
-	rtems_semaphore_obtain(yp->daemonSync, RTEMS_WAIT, RTEMS_NO_TIMEOUT);
-
-	/* I guess that we own the bsdnet_semaphore at this point.
-	 * Hence, we must set IFF_RUNNING in our context rather than
-	 * having the daemon do it [although it is probably safe, too].
-	 */
-	yp->arpcom.ac_if.if_flags |= IFF_RUNNING;
-}
-
-#ifdef TSILL_TODO
 static void yellowfin_timer(unsigned long data)
 {
 	struct net_device *dev = (struct net_device *)data;
@@ -939,75 +681,51 @@ static void yellowfin_tx_timeout(struct net_device *dev)
 	yp->stats.tx_errors++;
 	return;
 }
-#endif
 
 /* Initialize the Rx and Tx rings, along with various 'dev' bits. */
-static void yellowfin_init_ring(struct yellowfin_private *yp)
+static void yellowfin_init_ring(struct net_device *dev)
 {
+	struct yellowfin_private *yp = (struct yellowfin_private *)dev->priv;
 	int i;
 
-	yp->tx_free = TX_RING_SIZE;
+	yp->tx_full = 0;
 	yp->cur_rx = yp->cur_tx = 0;
 	yp->dirty_tx = 0;
 
-	yp->rx_buf_sz = (yp->arpcom.ac_if.if_mtu <= 1500 ? PKT_BUF_SZ : yp->arpcom.ac_if.if_mtu + 32);
+	yp->rx_buf_sz = (dev->mtu <= 1500 ? PKT_BUF_SZ : dev->mtu + 32);
 	yp->rx_head_desc = &yp->rx_ring[0];
 
 	for (i = 0; i < RX_RING_SIZE; i++) {
-		st_le32((volatile unsigned32 *)
-			&yp->rx_ring[i].dbdma_cmd,
-			CMD_RX_BUF | INTR_ALWAYS | yp->rx_buf_sz);
-		st_le32((volatile unsigned32 *)
-			&yp->rx_ring[i].branch_addr,
-		       	(unsigned long)virt_to_bus(&yp->rx_ring[i+1]));
+		yp->rx_ring[i].dbdma_cmd =
+			cpu_to_le32(CMD_RX_BUF | INTR_ALWAYS | yp->rx_buf_sz);
+		yp->rx_ring[i].branch_addr = virt_to_le32desc(&yp->rx_ring[i+1]);
 	}
 	/* Mark the last entry as wrapping the ring. */
-	st_le32((volatile unsigned32 *)
-		&yp->rx_ring[i-1].branch_addr,
-	        (unsigned long)virt_to_bus(&yp->rx_ring[0]));
+	yp->rx_ring[i-1].branch_addr = virt_to_le32desc(&yp->rx_ring[0]);
 
 	for (i = 0; i < RX_RING_SIZE; i++) {
-		struct mbuf *m;
-	        MGETHDR(m, M_WAIT, MT_DATA);
-		MCLGET(m, M_WAIT);
-		m->m_pkthdr.rcvif =  &yp->arpcom.ac_if;
-
-		yp->rx_mbuf[i] = m;
-		st_le32((volatile unsigned32 *)
-			&yp->rx_ring[i].addr,
-		       	(unsigned long)virt_to_bus(mtod(m, void*)));
+		struct sk_buff *skb = dev_alloc_skb(yp->rx_buf_sz);
+		yp->rx_skbuff[i] = skb;
+		if (skb == NULL)
+			break;
+		skb->dev = dev;			/* Mark as being used by this device. */
+		skb_reserve(skb, 2);	/* 16 byte align the IP header. */
+		yp->rx_ring[i].addr = virt_to_le32desc(skb->tail);
 	}
-	st_le32((volatile unsigned32 *)
-		&yp->rx_ring[i-1].dbdma_cmd,
-	       	CMD_STOP);
+	yp->rx_ring[i-1].dbdma_cmd = cpu_to_le32(CMD_STOP);
 	yp->dirty_rx = (unsigned int)(i - RX_RING_SIZE);
-
-	/* TODO: T.S. machines with a non-snooping copyback cache
-	 *       enabled on the RX buffers should flush/invalidate
-	 *       the cache lines overlapping the buffer here.
-	 *       (flush lines which overlap with adjacent memory,
-	 *       invalidate others)
-	 */
 
 #define NO_TXSTATS
 #ifdef NO_TXSTATS
 	/* In this mode the Tx ring needs only a single descriptor. */
 	for (i = 0; i < TX_RING_SIZE; i++) {
-		yp->tx_mbuf[i] = 0;
-		st_le32((volatile unsigned32 *)
-			& yp->tx_ring[i].dbdma_cmd,
-		       	CMD_STOP);
-		st_le32((volatile unsigned32 *)
-			&yp->tx_ring[i].branch_addr,
-		       	(unsigned long)virt_to_bus(&yp->tx_ring[i+1]));
+		yp->tx_skbuff[i] = 0;
+		yp->tx_ring[i].dbdma_cmd = cpu_to_le32(CMD_STOP);
+		yp->tx_ring[i].branch_addr = virt_to_le32desc(&yp->tx_ring[i+1]);
 	}
 	/* Wrap ring */
-	st_le32((volatile unsigned32 *)
-		&yp->tx_ring[--i].dbdma_cmd,
-	       	CMD_STOP | BRANCH_ALWAYS);
-	st_le32((volatile unsigned32 *)
-		&yp->tx_ring[i].branch_addr,
-	       	(unsigned long)virt_to_bus(&yp->tx_ring[0]));
+	yp->tx_ring[--i].dbdma_cmd = cpu_to_le32(CMD_STOP | BRANCH_ALWAYS);
+	yp->tx_ring[i].branch_addr = virt_to_le32desc(&yp->tx_ring[0]);
 #else
 	/* Tx ring needs a pair of descriptors, the second for the status. */
 	for (i = 0; i < TX_RING_SIZE*2; i++) {
@@ -1037,11 +755,12 @@ static void yellowfin_init_ring(struct yellowfin_private *yp)
 	return;
 }
 
-static int yellowfin_sendpacket(struct mbuf *m, struct yellowfin_private *yp)
+static int yellowfin_start_xmit(struct sk_buff *skb, struct net_device *dev)
 {
+	struct yellowfin_private *yp = (struct yellowfin_private *)dev->priv;
 	unsigned entry;
 
-#if LINUX_VERSION_CODE < 0x20323 && TSILL_TODO > 0xdeadbeef /* TSILL_TODO */
+#if LINUX_VERSION_CODE < 0x20323
 	/* Block a timer-based transmit from overlapping.  This could better be
 	   done with atomic_swap(1, dev->tbusy), but set_bit() works as well. */
 	if (netif_pause_tx_queue(dev) != 0) {
@@ -1058,78 +777,29 @@ static int yellowfin_sendpacket(struct mbuf *m, struct yellowfin_private *yp)
 	/* Calculate the next Tx descriptor entry. */
 	entry = yp->cur_tx % TX_RING_SIZE;
 
-	/* TSILL_TODO: should free old or check for NULL here */
-#ifndef TSILL_FINAL
-	if (yp->tx_mbuf[entry])
-		rtems_panic("yellowfin: mbuf leak");
-#endif
-	yp->tx_mbuf[entry] = m;
+	yp->tx_skbuff[entry] = skb;
 
 	if (gx_fix) {		/* Note: only works for paddable protocols e.g. IP. */
-		int cacheline_end = (virt_to_bus(mtod(m,int)) + m->m_len) % 32;
+		int cacheline_end = (virt_to_bus(skb->data) + skb->len) % 32;
 		/* Fix GX chipset errata. */
 		if (cacheline_end > 24  || cacheline_end == 0)
-			m->m_len += 32 - cacheline_end + 1;
+			skb->len += 32 - cacheline_end + 1;
 	}
 #ifdef NO_TXSTATS
-	/* T.S. Unfortunately, I have no datasheet of the 53C885 :-(
-	 * therefore, I cannot properly implement letting the hardware
-	 * "gather" mbufs into to one packet
-	 */
-	if (m->m_next) {
-		/* TODO: implement letting the hardware do this */
-		struct mbuf	*mtmp, *mdst;
-		unsigned char	*chpt;
-		int		len;
-		/* multiple mbufs in this packet, we have to
-		 * reassemble :-(
-		 */
-		/* alloc single destination buffer - we don't really
-		 * need a header but it makes things simpler
-		 */
-		MGETHDR(mdst, M_WAIT, MT_DATA);
-		MCLGET(mdst, M_WAIT);
-		for (mtmp=m, len=0, chpt=mtod(mdst,unsigned char*);
-		     mtmp;
-		     mtmp=mtmp->m_next) {
-			if (len+mtmp->m_len > sizeof(union mcluster))
-				rtems_panic("yellowfin: packet waaayyy too large");
-			memcpy((void*)chpt, mtod(mtmp, char*), mtmp->m_len);
-			chpt+=mtmp->m_len;
-			len+=mtmp->m_len;
-		}
-		mdst->m_len=len;
-		/* free old mbuf chain */
-		m_freem(m);
-		yp->tx_mbuf[entry] = m = mdst;
-		/* statistics */
-		yp->stats.txReassembled++;
-	} else {
-		/* single mbuf packet; just pass it on */
-	}
-	st_le32((volatile unsigned32 *)
-		&yp->tx_ring[entry].addr,
-	        (unsigned long)virt_to_bus(mtod(m, void *)));
+	yp->tx_ring[entry].addr = virt_to_le32desc(skb->data);
 	yp->tx_ring[entry].result_status = 0;
 	if (entry >= TX_RING_SIZE-1) {
 		/* New stop command. */
-		st_le32((volatile unsigned32 *)
-			&yp->tx_ring[0].dbdma_cmd,
-		        CMD_STOP);
-		st_le32((volatile unsigned32 *)
-			&yp->tx_ring[TX_RING_SIZE-1].dbdma_cmd,
-			(CMD_TX_PKT|BRANCH_ALWAYS | m->m_len));
+		yp->tx_ring[0].dbdma_cmd = cpu_to_le32(CMD_STOP);
+		yp->tx_ring[TX_RING_SIZE-1].dbdma_cmd =
+			cpu_to_le32(CMD_TX_PKT|BRANCH_ALWAYS | skb->len);
 	} else {
-		st_le32((volatile unsigned32 *)
-			&yp->tx_ring[entry+1].dbdma_cmd,
-			CMD_STOP);
-		st_le32((volatile unsigned32 *)
-			&yp->tx_ring[entry].dbdma_cmd,
-			(CMD_TX_PKT | BRANCH_IFTRUE | m->m_len));
+		yp->tx_ring[entry+1].dbdma_cmd = cpu_to_le32(CMD_STOP);
+		yp->tx_ring[entry].dbdma_cmd =
+			cpu_to_le32(CMD_TX_PKT | BRANCH_IFTRUE | skb->len);
 	}
 	yp->cur_tx++;
 #else
-#error "TODO: RTEMS implementation"
 	yp->tx_ring[entry<<1].request_cnt = skb->len;
 	yp->tx_ring[entry<<1].addr = virt_to_le32desc(skb->data);
 	/* The input_last (status-write) command is constant, but we must rewrite
@@ -1147,20 +817,11 @@ static int yellowfin_sendpacket(struct mbuf *m, struct yellowfin_private *yp)
 					  CMD_TX_PKT | BRANCH_IFTRUE) | skb->len);
 #endif
 
-	/* Non-x86 Todo: explicitly flush cache lines here.
-	 * T.S: my guess would be that the cache should be flushed
-	 * _before_ handing the descriptor over - however, I have
-	 * no datasheet and therefore, I don't know when this
-	 * happens exactly: when waking the TX or (as I _guess_)
-	 * when setting dbdma_cmd???
-	 * Luckily, The 604 (and up) PowerPC has a _snooping_cache_
-	 * much nicer than the 860...
-	 */
+	/* Non-x86 Todo: explicitly flush cache lines here. */
 
 	/* Wake the potentially-idle transmit channel. */
-	outl(0x10001000, yp->base_addr + TxCtrl);
+	outl(0x10001000, dev->base_addr + TxCtrl);
 
-#ifdef TSILL_TODO
 	if (yp->cur_tx - yp->dirty_tx >= TX_QUEUE_SIZE) {
 		netif_stop_tx_queue(dev);
 		yp->tx_full = 1;
@@ -1172,111 +833,72 @@ static int yellowfin_sendpacket(struct mbuf *m, struct yellowfin_private *yp)
 	} else
 		netif_unpause_tx_queue(dev);		/* Typical path */
 	dev->trans_start = jiffies;
-#endif
-	yp->tx_free--;
 
 	if (yellowfin_debug > 4) {
-		printk("%s: Yellowfin transmit frame #%d queued in slot %d.\n",
-			   yp->arpcom.ac_if.if_name, yp->cur_tx, entry);
+		printk(KERN_DEBUG "%s: Yellowfin transmit frame #%d queued in slot %d.\n",
+			   dev->name, yp->cur_tx, entry);
 	}
 	return 0;
 }
 
-/* The daemon does all of the work; RX, TX and cleaning up buffers/descriptors */
-static void yellowfin_daemon(void *arg)
+/* The interrupt handler does all of the Rx thread work and cleans up
+   after the Tx thread. */
+static void yellowfin_interrupt(int irq, void *dev_instance, struct pt_regs *regs)
 {
-struct yellowfin_private *yp = (struct yellowfin_private*)arg;
-long		ioaddr = yp->base_addr;
-int		boguscnt;
-rtems_event_set	events;
-struct mbuf	*m;
-u16		intr_status;
-struct ifnet	*ifp=&yp->arpcom.ac_if;
+	struct net_device *dev = (struct net_device *)dev_instance;
+	struct yellowfin_private *yp;
+	long ioaddr;
+	int boguscnt = max_interrupt_work;
 
-	printk("Yellowfin daemon: starting...\n");
+#ifndef final_version			/* Can never occur. */
+	if (dev == NULL) {
+		printk (KERN_ERR "yellowfin_interrupt(): irq %d for unknown device.\n", irq);
+		return;
+	}
+#endif
 
-	/* initialize the hardware and let the task
-	 * that spawned us continue
-	 */
-	(void)yellowfin_init_hw(yp);
-	rtems_semaphore_release(yp->daemonSync);
+	ioaddr = dev->base_addr;
+	yp = (struct yellowfin_private *)dev->priv;
+	if (test_and_set_bit(0, (void*)&yp->in_interrupt)) {
+		printk(KERN_ERR "%s: Re-entering the interrupt handler.\n", dev->name);
+		return;
+	}
 
-	/* NOTE: our creator possibly holds the bsdnet_semaphore.
-	 *       since that has PRIORITY_INVERSION enabled, our
-	 *       subsequent call to bsdnet_event_receive() will
-	 *       _not_ release it. It's still in posession of our
-	 *       owner.
-	 *       This is different from how killing this task
-	 *       is handled.
-	 */
-
-	for (;;) {
-		/* sleep until there's work to be done */
-		/* Note: bsdnet_event_receive() acquires
-		 *       the global bsdnet semaphore for
-		 *       mutual exclusion.
-		 */
-		rtems_bsdnet_event_receive(INTERRUPT_EVENT,
-				RTEMS_WAIT | RTEMS_EVENT_ANY,
-				RTEMS_NO_TIMEOUT,
-				&events);
-
-		if (KILL_EVENT & events) {
-			break;
-		}
-
-		boguscnt = max_interrupt_work;
-		/* clear interrupt status */
-		intr_status = inw(ioaddr + IntrClear);
+	do {
+		u16 intr_status = inw(ioaddr + IntrClear);
 
 		if (yellowfin_debug > 4)
-			printk("%s%d: Yellowfin interrupt, status 0x%04x.\n",
-				   ifp->if_name, ifp->if_unit, intr_status);
+			printk(KERN_DEBUG "%s: Yellowfin interrupt, status %4.4x.\n",
+				   dev->name, intr_status);
 
-		if (intr_status == 0) {
-			if (yellowfin_debug>5)
-				printk("Yellowfin: Hmmm, got event but nothing to do?\n");
-			continue;
-		}
+		if (intr_status == 0)
+			break;
 
 		if (intr_status & (IntrRxDone | IntrEarlyRx)) {
-			boguscnt-=yellowfin_rx(yp);
+			yellowfin_rx(dev);
 			outl(0x10001000, ioaddr + RxCtrl);		/* Wake Rx engine. */
 		}
 
 #ifdef NO_TXSTATS
-		/* clean up and try sending packets */
-		do {
-			m=0;
-			/* try to cleanup TX buffers */
-			for (; yp->cur_tx - yp->dirty_tx > 0; yp->dirty_tx++) {
-				int entry = yp->dirty_tx % TX_RING_SIZE;
-				if (yp->tx_ring[entry].result_status == 0)
-					break;
-				ifp->if_opackets++;
-				ifp->if_obytes += yp->tx_mbuf[entry]->m_len;
-				/* Free the original mbuf chain */
-				m_freem(yp->tx_mbuf[entry]);
-				yp->tx_mbuf[entry] = 0;
-				yp->tx_free++;
-			}
-			while (yp->tx_free) {
-				IF_DEQUEUE(&ifp->if_snd,m);
-				if (m) {
-					yellowfin_sendpacket(m, yp);
-					boguscnt--;
-				} else
-					break; /* nothing to send */
-			}
-			/* we leave this loop
-			 *  - either because there's no free buffer
-			 *    (m=0 initializer && !yp->tx_free)
-			 *  - or there's nothing to send (IF_DEQUEUE
-			 *    returned 0
-			 */
-		} while (m && boguscnt>=0);
+		for (; yp->cur_tx - yp->dirty_tx > 0; yp->dirty_tx++) {
+			int entry = yp->dirty_tx % TX_RING_SIZE;
+			if (yp->tx_ring[entry].result_status == 0)
+				break;
+			yp->stats.tx_packets++;
+#if LINUX_VERSION_CODE > 0x20127
+			yp->stats.tx_bytes += yp->tx_skbuff[entry]->len;
+#endif
+			/* Free the original skb. */
+			dev_free_skb_irq(yp->tx_skbuff[entry]);
+			yp->tx_skbuff[entry] = 0;
+		}
+		if (yp->tx_full
+			&& yp->cur_tx - yp->dirty_tx < TX_QUEUE_SIZE - 4) {
+			/* The ring is no longer full, clear tbusy. */
+			yp->tx_full = 0;
+			netif_resume_tx_queue(dev);
+		}
 #else
-#error "TODO: RTEMS not implemented"
 		if (intr_status & IntrTxDone
 			|| yp->tx_tail_desc->tx_errs) {
 			unsigned dirty_tx = yp->dirty_tx;
@@ -1338,7 +960,7 @@ struct ifnet	*ifp=&yp->arpcom.ac_if;
 
 #ifndef final_version
 			if (yp->cur_tx - dirty_tx > TX_RING_SIZE) {
-				printk("%s: Out-of-sync dirty pointer, %d vs. %d, full=%d.\n",
+				printk(KERN_ERR "%s: Out-of-sync dirty pointer, %d vs. %d, full=%d.\n",
 					   dev->name, dirty_tx, yp->cur_tx, yp->tx_full);
 				dirty_tx += TX_RING_SIZE;
 			}
@@ -1355,79 +977,39 @@ struct ifnet	*ifp=&yp->arpcom.ac_if;
 			yp->tx_tail_desc = &yp->tx_status[dirty_tx % TX_RING_SIZE];
 		}
 #endif
-		ifp->if_flags &= ~IFF_OACTIVE;
-
-		/* wrap around the ring indices */
-		if (yp->dirty_tx >= TX_RING_SIZE) {
-				yp->dirty_tx -= TX_RING_SIZE;
-				yp->cur_tx -= TX_RING_SIZE;
-		}
 
 		/* Log errors and other uncommon events. */
 		if (intr_status & 0x2ee)	/* Abnormal error summary. */
-			yellowfin_error(yp, intr_status);
+			yellowfin_error(dev, intr_status);
 
-		if (boguscnt < 0) {
-			printk("Warning %s%d: Too much work for daemon, "
-				   "status=0x%04x.\n",
-				   ifp->if_name, ifp->if_unit, intr_status);
+		if (--boguscnt < 0) {
+			printk(KERN_WARNING "%s: Too much work at interrupt, "
+				   "status=0x%4.4x.\n",
+				   dev->name, intr_status);
+			break;
 		}
-	}
-	ifp->if_flags &= ~(IFF_RUNNING|IFF_OACTIVE);
+	} while (1);
 
-	/* shut down the hardware */
-	yellowfin_stop_hw(yp);
-	/* flush the output queue */
-	for (;;) {
-			IF_DEQUEUE(&ifp->if_snd,m);
-			if (!m) 
-					break;
-			m_freem(m);
-	}
-	/* as of 'rtems_bsdnet_event_receive()' we own the
-	 * networking semaphore
-	 */
-	rtems_bsdnet_semaphore_release();
-	rtems_semaphore_release(yp->daemonSync);
-	if (yellowfin_debug > 1)
-		printk("Yellowfin daemon exiting...\n");
-	/* Note that I dont use yp->daemonTid here - 
-	 * theoretically, that variable could already
-	 * hold a newly created TID
-	 */
-	rtems_task_delete(RTEMS_SELF);
+	if (yellowfin_debug > 3)
+		printk(KERN_DEBUG "%s: exiting interrupt, status=%#4.4x.\n",
+			   dev->name, inw(ioaddr + IntrStatus));
+
+	clear_bit(0, (void*)&yp->in_interrupt);
+	return;
 }
 
-/* T.Straumann:
- * TODO: maybe, the algorithm should be redesigned to something
- *       like this:
- *          while (yp->rx_head_desc->result_status) {
- *                   ether_input_and_statistics();
- *                   alloc_new_buffer();
- *                   wake_up_rx_engine();
- *                   move_head_desc();
- *          }
- *
- *       instead of
- *
- *          while (yp->rx_head_desc->result_status) {
- *          		ether_input_and_statistics(packet);
- *          		move_head_desc();
- *          }
- *          refill_all_empty_descs();
- *          wake_up_rx_engine();
- */
-
-static int yellowfin_rx(struct yellowfin_private *yp)
+/* This routine is logically part of the interrupt handler, but separated
+   for clarity and better register allocation. */
+static int yellowfin_rx(struct net_device *dev)
 {
+	struct yellowfin_private *yp = (struct yellowfin_private *)dev->priv;
 	int entry = yp->cur_rx % RX_RING_SIZE;
 	int boguscnt = yp->dirty_rx + RX_RING_SIZE - yp->cur_rx;
-	struct ifnet *ifp = & yp->arpcom.ac_if;
 
 	if (yellowfin_debug > 4) {
-		printk(" In yellowfin_rx(), entry %d status 0x%08x.\n",
+		printk(KERN_DEBUG " In yellowfin_rx(), entry %d status %8.8x.\n",
 			   entry, yp->rx_ring[entry].result_status);
-		printk("   #%d desc. 0x%08x 0x%08x 0x%08x.\n",
+		printk(KERN_DEBUG "   #%d desc. %8.8x %8.8x %8.8x.\n",
 			   entry, yp->rx_ring[entry].dbdma_cmd, yp->rx_ring[entry].addr,
 			   yp->rx_ring[entry].result_status);
 	}
@@ -1443,33 +1025,33 @@ static int yellowfin_rx(struct yellowfin_private *yp)
 		s16 frame_status = get_unaligned((s16*)&(buf_addr[data_size - 2]));
 
 		if (yellowfin_debug > 4)
-			printk("  yellowfin_rx() status was 0x%04x.\n",
+			printk(KERN_DEBUG "  yellowfin_rx() status was %4.4x.\n",
 				   frame_status);
 		if (--boguscnt < 0)
 			break;
 		if ( ! (desc_status & RX_EOP)) {
-			printk("%s%d: Oversized Ethernet frame spanned multiple buffers,"
-				   " status 0x%04x!\n", ifp->if_name, ifp->if_unit, desc_status);
-			yp->stats.length_errors++;
+			printk(KERN_WARNING "%s: Oversized Ethernet frame spanned multiple buffers,"
+				   " status %4.4x!\n", dev->name, desc_status);
+			yp->stats.rx_length_errors++;
 		} else if ((yp->drv_flags & IsGigabit)  &&  (frame_status & 0x0038)) {
 			/* There was a error. */
 			if (yellowfin_debug > 3)
-				printk("  yellowfin_rx() Rx error was 0x%04x.\n",
+				printk(KERN_DEBUG "  yellowfin_rx() Rx error was %4.4x.\n",
 					   frame_status);
-			ifp->if_ierrors++;
-			if (frame_status & 0x0060) yp->stats.length_errors++;
-			if (frame_status & 0x0008) yp->stats.frame_errors++;
-			if (frame_status & 0x0010) yp->stats.crc_errors++;
-			if (frame_status < 0) ifp->if_iqdrops++;
+			yp->stats.rx_errors++;
+			if (frame_status & 0x0060) yp->stats.rx_length_errors++;
+			if (frame_status & 0x0008) yp->stats.rx_frame_errors++;
+			if (frame_status & 0x0010) yp->stats.rx_crc_errors++;
+			if (frame_status < 0) yp->stats.rx_dropped++;
 		} else if ( !(yp->drv_flags & IsGigabit)  &&
 				   ((buf_addr[data_size-1] & 0x85) || buf_addr[data_size-2] & 0xC0)) {
 			u8 status1 = buf_addr[data_size-2];
 			u8 status2 = buf_addr[data_size-1];
-			ifp->if_ierrors++;
-			if (status1 & 0xC0) yp->stats.length_errors++;
-			if (status2 & 0x03) yp->stats.frame_errors++;
-			if (status2 & 0x04) yp->stats.crc_errors++;
-			if (status2 & 0x80) ifp->if_iqdrops++;
+			yp->stats.rx_errors++;
+			if (status1 & 0xC0) yp->stats.rx_length_errors++;
+			if (status2 & 0x03) yp->stats.rx_frame_errors++;
+			if (status2 & 0x04) yp->stats.rx_crc_errors++;
+			if (status2 & 0x80) yp->stats.rx_dropped++;
 #ifdef YF_PROTOTYPE			/* Support for prototype hardware errata. */
 		} else if ((yp->flags & HasMACAddrBug)  &&
 				   memcmp(le32desc_to_virt(yp->rx_ring[entry].addr),
@@ -1477,44 +1059,41 @@ static int yellowfin_rx(struct yellowfin_private *yp)
 				   && memcmp(le32desc_to_virt(yp->rx_ring[entry].addr),
 							 "\377\377\377\377\377\377", 6) != 0) {
 			if (bogus_rx++ == 0)
-				printk("%s%d: Bad frame to %2.2x:%2.2x:%2.2x:%2.2x:"
+				printk(KERN_WARNING "%s: Bad frame to %2.2x:%2.2x:%2.2x:%2.2x:"
 					   "%2.2x:%2.2x.\n",
-					   ifp->if_name, ifp->if_unit,
-					   buf_addr[0], buf_addr[1], buf_addr[2],
+					   dev->name, buf_addr[0], buf_addr[1], buf_addr[2],
 					   buf_addr[3], buf_addr[4], buf_addr[5]);
 #endif
 		} else {
-			struct mbuf *m;
+			struct sk_buff *skb;
 			int pkt_len = data_size -
 				(yp->chip_id ? 7 : 8 + buf_addr[data_size - 8]);
 			/* To verify: Yellowfin Length should omit the CRC! */
 
 #ifndef final_version
 			if (yellowfin_debug > 4)
-				printk("  yellowfin_rx() normal Rx pkt length %d"
+				printk(KERN_DEBUG "  yellowfin_rx() normal Rx pkt length %d"
 					   " of %d, bogus_cnt %d.\n",
 					   pkt_len, data_size, boguscnt);
 #endif
 			/* Check if the packet is long enough to just pass up the skbuff
 			   without copying to a properly sized skbuff. */
 			if (pkt_len > rx_copybreak) {
-				m = yp->rx_mbuf[entry];
-				yp->rx_mbuf[entry] = NULL;
+				char *temp = skb_put(skb = yp->rx_skbuff[entry], pkt_len);
+				yp->rx_skbuff[entry] = NULL;
 #ifndef final_version				/* Remove after testing. */
-				if (le32desc_to_virt(yp->rx_ring[entry].addr) != mtod(m,void*))
-					printk("%s: Internal fault: The skbuff addresses "
-						   "do not match in yellowfin_rx: %p vs. %p.\n",
-						   ifp->if_name,
+				if (le32desc_to_virt(yp->rx_ring[entry].addr) != temp)
+					printk(KERN_ERR "%s: Internal fault: The skbuff addresses "
+						   "do not match in yellowfin_rx: %p vs. %p / %p.\n",
+						   dev->name,
 						   le32desc_to_virt(yp->rx_ring[entry].addr),
-						   mtod(m,void*));
+						   skb->head, temp);
 #endif
 			} else {
-	        		MGETHDR(m, M_WAIT, MT_DATA);
-				if (pkt_len >= MINCLSIZE) {
-					MCLGET(m, M_WAIT);
-				}
-				m->m_pkthdr.rcvif = ifp;
-#ifdef TSILL_TODO
+				skb = dev_alloc_skb(pkt_len + 2);
+				if (skb == NULL)
+					break;
+				skb->dev = dev;
 				skb_reserve(skb, 2);	/* 16 byte align the IP header */
 #if HAS_IP_COPYSUM
 				eth_copy_and_sum(skb, yp->rx_skbuff[entry]->tail, pkt_len, 0);
@@ -1523,17 +1102,7 @@ static int yellowfin_rx(struct yellowfin_private *yp)
 				memcpy(skb_put(skb, pkt_len), yp->rx_skbuff[entry]->tail,
 					   pkt_len);
 #endif
-#endif
-				memcpy(mtod(m,char*), mtod(yp->rx_mbuf[entry],char*), pkt_len);
 			}
-			/* fill in length and pass up */
-			m->m_len = m->m_pkthdr.len = pkt_len - sizeof(struct ether_header);
-			{
-				struct ether_header *eh = mtod(m, struct ether_header*);
-				m->m_data += sizeof(*eh);
-				ether_input(ifp,eh,m);
-			}
-#ifdef TSILL_TODO
 			skb->protocol = eth_type_trans(skb, dev);
 			netif_rx(skb);
 			dev->last_rx = jiffies;
@@ -1541,9 +1110,6 @@ static int yellowfin_rx(struct yellowfin_private *yp)
 #if LINUX_VERSION_CODE > 0x20127
 			yp->stats.rx_bytes += pkt_len;
 #endif
-#endif
-			ifp->if_ipackets++;
-			ifp->if_ibytes+=pkt_len;
 		}
 		entry = (++yp->cur_rx) % RX_RING_SIZE;
 		yp->rx_head_desc = &yp->rx_ring[entry];
@@ -1552,134 +1118,69 @@ static int yellowfin_rx(struct yellowfin_private *yp)
 	/* Refill the Rx ring buffers. */
 	for (; yp->cur_rx - yp->dirty_rx > 0; yp->dirty_rx++) {
 		entry = yp->dirty_rx % RX_RING_SIZE;
-		if (yp->rx_mbuf[entry] == NULL) {
-			struct mbuf *m;
-	        	MGETHDR(m, M_WAIT, MT_DATA);
-			MCLGET(m, M_WAIT);
-			yp->rx_mbuf[entry] = m;
-			m->m_pkthdr.rcvif = ifp; /* Mark as being used by this device. */
-#ifdef TSILL_TODO
-			skb_reserve(skb, 2);	 /* Align IP on 16 byte boundaries */
-#endif
-			st_le32((volatile unsigned32 *)
-				&yp->rx_ring[entry].addr,
-		       		(unsigned long)virt_to_bus(mtod(m, void*)));
+		if (yp->rx_skbuff[entry] == NULL) {
+			struct sk_buff *skb = dev_alloc_skb(yp->rx_buf_sz);
+			yp->rx_skbuff[entry] = skb;
+			if (skb == NULL)
+				break;				/* Better luck next round. */
+			skb->dev = dev;			/* Mark as being used by this device. */
+			skb_reserve(skb, 2);	/* Align IP on 16 byte boundaries */
+			yp->rx_ring[entry].addr = virt_to_le32desc(skb->tail);
 		}
-		
-		/* TODO: T.S. machines with a non-snooping copyback cache
-		 *       enabled on the RX buffers should flush/invalidate
-		 *       the cache lines overlapping the buffer here.
-		 *       (flush lines which overlap with adjacent memory,
-	 	 *       invalidate others)
-		 *       Actually, this should be optimized: reallocation
-		 *       of buffers and cache invalidation should be handled
-		 *       above since copying and invalidating small buffers
-		 *       can be done more efficiently in one single step...
-		 * Yet, I leave it here for the moment, so I can re-use
-		 * Don's code.
-		 */
-		st_le32((volatile unsigned32 *)
-			&yp->rx_ring[entry].dbdma_cmd,
-			CMD_STOP);
+		yp->rx_ring[entry].dbdma_cmd = cpu_to_le32(CMD_STOP);
 		yp->rx_ring[entry].result_status = 0;	/* Clear complete bit. */
 		if (entry != 0)
-			st_le32((volatile unsigned32 *)
-				&yp->rx_ring[entry - 1].dbdma_cmd,
-				(CMD_RX_BUF | INTR_ALWAYS | yp->rx_buf_sz));
+			yp->rx_ring[entry - 1].dbdma_cmd =
+				cpu_to_le32(CMD_RX_BUF | INTR_ALWAYS | yp->rx_buf_sz);
 		else
-			st_le32((volatile unsigned32 *)
-				&yp->rx_ring[RX_RING_SIZE - 1].dbdma_cmd,
-				(CMD_RX_BUF | INTR_ALWAYS | BRANCH_ALWAYS
-							| yp->rx_buf_sz));
-	}
-	/* wrap around ring indices */
-	if (yp->dirty_rx >= RX_RING_SIZE) {
-			yp->dirty_rx -= RX_RING_SIZE;
-			yp->cur_rx -= RX_RING_SIZE;
-			/* both should be 0 now */
+			yp->rx_ring[RX_RING_SIZE - 1].dbdma_cmd =
+				cpu_to_le32(CMD_RX_BUF | INTR_ALWAYS | BRANCH_ALWAYS
+							| yp->rx_buf_sz);
 	}
 
 	return 0;
 }
 
-static void yellowfin_error(struct yellowfin_private *yp, int intr_status)
+static void yellowfin_error(struct net_device *dev, int intr_status)
 {
-	struct ifnet *ifp = &yp->arpcom.ac_if;
-	printk("%s: Something Wicked happened! 0x%04x.\n",
-		   ifp->if_name, intr_status);
+	struct yellowfin_private *yp = (struct yellowfin_private *)dev->priv;
+
+	printk(KERN_ERR "%s: Something Wicked happened! %4.4x.\n",
+		   dev->name, intr_status);
 	/* Hmmmmm, it's not clear what to do here. */
 	if (intr_status & (IntrTxPCIErr | IntrTxPCIFault))
-		ifp->if_oerrors++;
+		yp->stats.tx_errors++;
 	if (intr_status & (IntrRxPCIErr | IntrRxPCIFault))
-		ifp->if_ierrors++;
+		yp->stats.rx_errors++;
 }
 
-static void yellowfin_start(struct ifnet * ifp)
+static int yellowfin_close(struct net_device *dev)
 {
-	struct yellowfin_private *yp=ifp->if_softc;
-	ifp->if_flags |= IFF_OACTIVE;
-	rtems_event_send (yp->daemonTid, INTERRUPT_EVENT);
-}
+	long ioaddr = dev->base_addr;
+	struct yellowfin_private *yp = (struct yellowfin_private *)dev->priv;
+	int i;
 
-static void yellowfin_stop(struct yellowfin_private *yp)
-{
-	/* kill the daemon. We also must release the networking
-	 * semaphore or there'll be a deadlock...
-	 */
-	rtems_event_send(yp->daemonTid, KILL_EVENT);
-	rtems_bsdnet_semaphore_release();
+	netif_stop_tx_queue(dev);
 
-	yp->daemonTid=0;
-	/* now wait for it to die */
-	rtems_semaphore_obtain(yp->daemonSync,RTEMS_WAIT,RTEMS_NO_TIMEOUT);
+	if (yellowfin_debug > 1) {
+		printk(KERN_DEBUG "%s: Shutting down ethercard, status was Tx %4.4x "
+			   "Rx %4.4x Int %2.2x.\n",
+			   dev->name, inw(ioaddr + TxStatus),
+			   inw(ioaddr + RxStatus), inw(ioaddr + IntrStatus));
+		printk(KERN_DEBUG "%s: Queue pointers were Tx %d / %d,  Rx %d / %d.\n",
+			   dev->name, yp->cur_tx, yp->dirty_tx, yp->cur_rx, yp->dirty_rx);
+	}
 
-	/* reacquire the bsdnet sema */
-	rtems_bsdnet_semaphore_obtain();
-}
-
-
-static int yellowfin_stop_hw(struct  yellowfin_private *yp)
-{
-	struct ifnet	*ifp = &yp->arpcom.ac_if;
-	long		ioaddr = yp->base_addr;
-	int		i;
-
-	if (yellowfin_debug > 1)
-		printk("Yellowfin: entering stop_hw...\n");
-
-	/* remove our interrupt handler which will also
-	 * disable interrupts at the MPIC and the device
-	 * itself
-	 */
-	if (!BSP_remove_rtems_irq_handler(&yellowfin_irq_info))
-		rtems_panic("Yellowfin: unable to remove IRQ handler!");
-
-#if 0	/* done already by remove_rtems_irq_handler */
 	/* Disable interrupts by clearing the interrupt mask. */
 	outw(0x0000, ioaddr + IntrEnb);
-#endif
 
 	/* Stop the chip's Tx and Rx processes. */
 	outl(0x80000000, ioaddr + RxCtrl);
 	outl(0x80000000, ioaddr + TxCtrl);
 
-	if (yellowfin_debug > 1) {
-		printk("%s%d: Shutting down ethercard, status was Tx 0x%04x "
-			   "Rx 0x%04x Int 0x%02x.\n",
-			   ifp->if_name, ifp->if_unit,
-			   inw(ioaddr + TxStatus),
-			   inw(ioaddr + RxStatus), inw(ioaddr + IntrStatus));
-		printk("%s%d: Queue pointers were Tx %d / %d,  Rx %d / %d.\n",
-			   ifp->if_name, ifp->if_unit,
-			   yp->cur_tx, yp->dirty_tx, yp->cur_rx, yp->dirty_rx);
-	}
-
-#ifdef TSILL_TODO
 	del_timer(&yp->timer);
-#endif
 
 #if defined(__i386__)
-#error "TODO: i386 support not implemented"
 	if (yellowfin_debug > 2) {
 		printk("\n"KERN_DEBUG"  Tx ring at %8.8x:\n",
 			   (int)virt_to_bus(yp->tx_ring));
@@ -1714,34 +1215,42 @@ static int yellowfin_stop_hw(struct  yellowfin_private *yp)
 	}
 #endif /* __i386__ debugging only */
 
+	free_irq(dev->irq, dev);
+
 	/* Free all the skbuffs in the Rx queue. */
 	for (i = 0; i < RX_RING_SIZE; i++) {
-		st_le32((volatile unsigned32 *)
-			&yp->rx_ring[i].dbdma_cmd,
-			CMD_STOP);
+		yp->rx_ring[i].dbdma_cmd = cpu_to_le32(CMD_STOP);
 		yp->rx_ring[i].addr = 0xBADF00D0; /* An invalid address. */
-		if (yp->rx_mbuf[i]) {
-			m_freem(yp->rx_mbuf[i]);
-			yp->rx_mbuf[i] = 0;
+		if (yp->rx_skbuff[i]) {
+#if LINUX_VERSION_CODE < 0x20100
+			yp->rx_skbuff[i]->free = 1;
+#endif
+			dev_free_skb(yp->rx_skbuff[i]);
 		}
+		yp->rx_skbuff[i] = 0;
 	}
 	for (i = 0; i < TX_RING_SIZE; i++) {
-		if (yp->tx_mbuf[i])
-			m_freem(yp->rx_mbuf[i]);
-		yp->tx_mbuf[i] = 0;
+		if (yp->tx_skbuff[i])
+			dev_free_skb(yp->tx_skbuff[i]);
+		yp->tx_skbuff[i] = 0;
 	}
 
 #ifdef YF_PROTOTYPE			/* Support for prototype hardware errata. */
 	if (yellowfin_debug > 0) {
-		printk("%s%d: Received %d frames that we should not have.\n",
-			   ifp->if_name, ifp->if_unit, bogus_rx);
+		printk(KERN_DEBUG "%s: Received %d frames that we should not have.\n",
+			   dev->name, bogus_rx);
 	}
 #endif
+	MOD_DEC_USE_COUNT;
 
 	return 0;
 }
 
-#ifdef TSILL_TODO
+static struct net_device_stats *yellowfin_get_stats(struct net_device *dev)
+{
+	struct yellowfin_private *yp = (struct yellowfin_private *)dev->priv;
+	return &yp->stats;
+}
 
 /* Set or clear the multicast filter for this adaptor. */
 
@@ -1767,16 +1276,15 @@ static inline unsigned ether_crc_le(int length, unsigned char *data)
 	return crc;
 }
 
-#endif /* TSILL_TODO */
 
-static void set_rx_mode(struct yellowfin_private *yp)
+static void set_rx_mode(struct net_device *dev)
 {
-	long ioaddr = yp->base_addr;
+	struct yellowfin_private *yp = (struct yellowfin_private *)dev->priv;
+	long ioaddr = dev->base_addr;
 	u16 cfg_value = inw(ioaddr + Cnfg);
 
 	/* Stop the Rx process to change any value. */
 	outw(cfg_value & ~0x1000, ioaddr + Cnfg);
-#ifdef TSILL_TODO
 	if (dev->flags & IFF_PROMISC) {			/* Set promiscuous. */
 		/* Unconditionally log net taps. */
 		printk(KERN_NOTICE "%s: Promiscuous mode enabled.\n", dev->name);
@@ -1808,35 +1316,20 @@ static void set_rx_mode(struct yellowfin_private *yp)
 		for (i = 0; i < 4; i++)
 			outw(hash_table[i], ioaddr + HashTbl + i*2);
 		outw(0x0003, ioaddr + AddrMode);
-	} else
-#endif
-       	{					/* Normal, unicast/broadcast-only mode. */
+	} else {					/* Normal, unicast/broadcast-only mode. */
 		outw(0x0001, ioaddr + AddrMode);
 	}
 	/* Restart the Rx process. */
 	outw(cfg_value | 0x1000, ioaddr + Cnfg);
 }
 
-static int yellowfin_ioctl(struct ifnet *ifp, int cmd, caddr_t arg)
+static int mii_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 {
-	struct yellowfin_private *np = ifp->if_softc;
-#ifdef USE_MII_IOCTLS /* TODO: the constants are not defined yet */
-	long ioaddr = np->base_addr;
-#if 0
-	u16 *data = (u16 *)arg;
-#else
-	/* TODO: I believe arg is a struct ifreq */
-#endif
-#endif
-
-	printk("Yellowfin: entering ioctl...\n");
+	struct yellowfin_private *np = (void *)dev->priv;
+	long ioaddr = dev->base_addr;
+	u16 *data = (u16 *)&rq->ifr_data;
 
 	switch(cmd) {
-	default:
-		printk("Yellowfin: etherioctl...\n");
-		return ether_ioctl(ifp, cmd, arg);
-
-#ifdef USE_MII_IOCTLS
 	case SIOCGMIIPHY:		/* Get the address of the PHY in use. */
 		data[0] = np->phys[0] & 0x1f;
 		/* Fall Through */
@@ -1844,6 +1337,8 @@ static int yellowfin_ioctl(struct ifnet *ifp, int cmd, caddr_t arg)
 		data[3] = mdio_read(ioaddr, data[0] & 0x1f, data[1] & 0x1f);
 		return 0;
 	case SIOCSMIIREG:		/* Write the specified MII register */
+		if (!capable(CAP_NET_ADMIN))
+			return -EPERM;
 		if (data[0] == np->phys[0]) {
 			u16 value = data[2];
 			switch (data[1]) {
@@ -1859,39 +1354,45 @@ static int yellowfin_ioctl(struct ifnet *ifp, int cmd, caddr_t arg)
 		}
 		mdio_write(ioaddr, data[0] & 0x1f, data[1] & 0x1f, data[2]);
 		return 0;
-#endif
-
-	case SIOCSIFFLAGS:
-		switch (ifp->if_flags & (IFF_UP | IFF_RUNNING)) {
-		case IFF_RUNNING:
-			yellowfin_stop(np);
-			break;
-
-		case IFF_UP:
-			yellowfin_init(np);
-			break;
-
-		case IFF_UP | IFF_RUNNING:
-			yellowfin_stop(np);
-			yellowfin_init(np);
-			break;
-
-		default:
-			break;
-		}
-		break;
-
-#ifdef TSILL_TODO
-	case SIO_RTEMS_SHOW_STATS:
-		dec21140_stats (sc);
-		break;
-#endif
-
+	default:
+		return -EOPNOTSUPP;
 	}
-	printk("Yellowfin: leaving ioctl...\n");
-	return 0;
 }
 
+
+#ifdef MODULE
+int init_module(void)
+{
+	if (yellowfin_debug)		/* Emit version even if no cards detected. */
+		printk(KERN_INFO "%s" KERN_INFO "%s", version1, version2);
+	return pci_drv_register(&yellowfin_drv_id, NULL);
+}
+
+void cleanup_module(void)
+{
+	struct net_device *next_dev;
+
+	pci_drv_unregister(&yellowfin_drv_id);
+
+	/* No need to check MOD_IN_USE, as sys_delete_module() checks. */
+	while (root_yellowfin_dev) {
+		struct yellowfin_private *np = (void *)(root_yellowfin_dev->priv);
+		unregister_netdev(root_yellowfin_dev);
+#ifdef USE_IO_OPS
+		release_region(root_yellowfin_dev->base_addr,
+					   pci_id_tbl[np->chip_id].io_size);
+#else
+		iounmap((char *)root_yellowfin_dev->base_addr);
+#endif
+		next_dev = np->next_module;
+		if (np->priv_addr)
+			kfree(np->priv_addr);
+		kfree(root_yellowfin_dev);
+		root_yellowfin_dev = next_dev;
+	}
+}
+
+#endif  /* MODULE */
 
 /*
  * Local variables:
@@ -1903,4 +1404,3 @@ static int yellowfin_ioctl(struct ifnet *ifp, int cmd, caddr_t arg)
  *  tab-width: 4
  * End:
  */
-
