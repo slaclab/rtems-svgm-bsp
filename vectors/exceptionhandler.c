@@ -155,11 +155,13 @@ int						quiet=0;
 
 				/* it's MCP; gather info from the host bridge */
 
+				/* read latched status prior to resetting a potential error condition */
+				pci_read_config_byte(0,0,0,0xc3,&c1);
+				pci_read_config_byte(0,0,0,0xc7,&c2);
+				pci_read_config_dword(0,0,0,0xc8,&l);
+
 				gerr=_BSP_clear_hostbridge_errors(0,0);
 				if (0x80 != gerr) {
-					pci_read_config_byte(0,0,0,0xc3,&c1);
-					pci_read_config_byte(0,0,0,0xc7,&c2);
-					pci_read_config_dword(0,0,0,0xc8,&l);
 					if (!quiet) {
 						printk("Grackle Error Registers: PCI CSR: %04x, ERRDR1: %02x, ERRDR2: %02x\n",
 								gerr & 0xffff, (gerr>>16) & 0xff, (gerr>>24)&0xff);
