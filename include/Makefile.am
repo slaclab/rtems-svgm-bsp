@@ -9,9 +9,6 @@ include_HEADERS = bspopts.h
 H_FILES = ../include/bsp.h ../include/bspVME.h \
     ../../../shared/include/coverhd.h
 
-BSP_H_FILES = ../../shared/console/consoleIo.h ../../shared/console/uart.h \
-    ../irq/irq.h
-
 $(PROJECT_INCLUDE):
 	$(mkinstalldirs) $@
 
