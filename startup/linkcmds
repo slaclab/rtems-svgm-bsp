@@ -231,9 +231,9 @@ __BSP_wrap_rtems_bsdnet_do_bootp =
 	DEFINED(rtems_bsdnet_do_bootp) ?
 		rtems_bsdnet_do_bootp
 		: 0 ;
-__BSP_wrap_inet_ntop =
-	DEFINED(inet_ntop) ?
-		inet_ntop
+__BSP_wrap_inet_pton =
+	DEFINED(inet_pton) ?
+		inet_pton
 		: 0 ;
 __BSP_wrap_rtems_bsdnet_loopattach =
 	DEFINED(rtems_bsdnet_loopattach) ?

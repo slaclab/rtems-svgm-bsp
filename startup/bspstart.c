@@ -69,6 +69,7 @@
  */
 static void (*the_apps_bootp)(void)=0;
 static void my_bootp_intercept(void);
+static void fillin_srvrandfile(void);
 
 /* NOTE the '__BSP_wrap_xxx' symbols are defined by
  * the linker script. The idea is to avoid referencing
@@ -82,14 +83,14 @@ extern char   						*__BSP_wrap_rtems_bsdnet_bootp_boot_file_name;
 extern struct in_addr				__BSP_wrap_rtems_bsdnet_bootp_server_address;
 extern struct rtems_bsdnet_config	__BSP_wrap_rtems_bsdnet_config;
 void								__BSP_wrap_rtems_bsdnet_do_bootp();
-int									__BSP_wrap_inet_ntop();
+int									__BSP_wrap_inet_pton();
 int									__BSP_wrap_rtems_bsdnet_loopattach();
 
 #define bootp_file					__BSP_wrap_rtems_bsdnet_bootp_boot_file_name
 #define bootp_srvr					__BSP_wrap_rtems_bsdnet_bootp_server_address
 #define net_config					__BSP_wrap_rtems_bsdnet_config
 #define do_bootp					__BSP_wrap_rtems_bsdnet_do_bootp
-#define INET_NTOP					__BSP_wrap_inet_ntop
+#define INET_PTON					__BSP_wrap_inet_pton
 #define loopattach					__BSP_wrap_rtems_bsdnet_loopattach
 
 
@@ -314,7 +315,7 @@ void bsp_pretasking_hook(void)
 		/* seems so - make sure the other symbols are
 		 * defined also...
 		 */
-		assert(&bootp_file && &bootp_srvr && do_bootp && INET_NTOP 
+		assert(&bootp_file && &bootp_srvr && do_bootp && INET_PTON 
 				&& "APP NOT LINKED WITH ALL NECESSARY NETWORKING SYMBOLS");
 		/* now hack into the network configuration... */
 
@@ -338,6 +339,8 @@ void bsp_pretasking_hook(void)
 				boot_my_ip=0;
 				ifc->ip_netmask = boot_my_netmask;
 				boot_my_netmask = 0;
+				/* override the server/filename parameters */
+				fillin_srvrandfile();
 			}
 			
 		} else {
@@ -363,6 +366,24 @@ void bsp_pretasking_hook(void)
 }
 
 #ifdef USE_BOOTP_STUFF
+static void
+fillin_srvrandfile(void)
+{
+	/* OK - now let's see what we have */
+	if (boot_srvname) {
+		/* Seems we have a different file server */
+		if (INET_PTON(AF_INET,
+					boot_srvname,
+					&bootp_srvr)) {
+		}
+	}
+	if (boot_filename) {
+		/* Ha - they changed the file name */
+		bootp_file=boot_filename;
+		/* (dont bother freeing the old one - we don't really know if its malloced */
+		boot_filename=0;
+	}
+}
 /* if the bootloader loaded a different file
  * than what the BOOTP/DHCP server says we have
  * then we want to forge the respective system
@@ -377,21 +398,8 @@ my_bootp_intercept(void)
 	} else {
 		do_bootp();
 	}
-	/* OK - now let's see what we have */
-	if (boot_srvname) {
-		/* Seems we have a different file server */
-		if (INET_NTOP(AF_INET,
-					&bootp_srvr,
-					boot_srvname,
-					strlen(boot_srvname))) {
-		}
-	}
-	if (boot_filename) {
-		/* Ha - they changed the file name */
-		bootp_file=boot_filename;
-		/* (dont bother freeing the old one - we don't really know if its malloced */
-		boot_filename=0;
-	}
+	/* override the server/filename parameters */
+	fillin_srvrandfile();
 }
 #endif
 
