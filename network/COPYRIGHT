@@ -1,0 +1,27 @@
+NOTE NOTE NOTE NOTE:
+        This driver is released under the GPL, _NOT_ under the
+        RTEMS variant!
+NOTE NOTE NOTE NOTE:
+
+        Written 1997-2001 by Donald Becker.
+
+        RTEMS port 2001 by Till Straumann, <strauman@slac.stanford.edu>
+
+        This software may be used and distributed according to the terms of
+        the GNU General Public License (GPL), incorporated herein by reference.
+        Drivers based on or derived from this code fall under the GPL and must
+        retain the authorship, copyright and license notice.  This file is not
+        a complete program and may only be used when the entire operating
+        system is licensed under the GPL.
+
+        This driver is for the Packet Engines G-NIC PCI Gigabit Ethernet adapter.
+        It also supports the Symbios Logic version of the same chip core.
+
+        The author may be reached as becker@scyld.com, or C/O
+        Scyld Computing Corporation
+        410 Severn Ave., Suite 210
+        Annapolis MD 21403
+
+        Support and updates available at
+        http://www.scyld.com/network/yellowfin.html
+
