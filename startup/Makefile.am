@@ -9,7 +9,7 @@ VPATH = @srcdir@:@srcdir@/../console:@srcdir@/../../../shared:@srcdir@/../../sha
 INCLUDES = -I @srcdir@/../synergy
 
 C_FILES = bootcard.c main.c bspstart.c bsppost.c bsplibc.c sbrk.c bspclean.c \
-    gnatinstallhandler.c
+    gnatinstallhandler.c vmeconfig.c
 C_O_FILES = $(C_FILES:%.c=$(ARCH)/%.o)
 
 OBJS = $(C_O_FILES)

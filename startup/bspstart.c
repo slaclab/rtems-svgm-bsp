@@ -113,6 +113,8 @@ char *rtems_progname;
 void bsp_postdriver_hook(void);
 void bsp_libc_init( void *, unsigned32, int );
 
+void BSP_vme_config(void);
+
 /*
  *  Function:   bsp_pretasking_hook
  *  Created:    95/03/10
@@ -376,56 +378,11 @@ void bsp_start( void )
 #ifdef SHOW_MORE_INIT_SETTINGS
   printk("Going to initialize VME bridge (disabling all windows)\n");
 #endif  
-  vmeUniverseInit();
-  vmeUniverseReset();
-
-  /* setup a PCI area to map the VME bus */
-  setdbat(2, _VME_A32_WIN0_ON_PCI, _VME_A32_WIN0_ON_PCI, 0x10000000, IO_PAGE);
-
-  /* map VME address ranges */
-  vmeUniverseMasterPortCfg(
-	0,
-	VME_AM_EXT_SUP_DATA,
-	0x20000000,	/* TODO: make this a configuration option */ 
-	_VME_A32_WIN0_ON_PCI,
-	0x0F000000);
-  vmeUniverseMasterPortCfg(
-	1,
-	VME_AM_STD_SUP_DATA,
-	0x00000000,
-	_VME_A24_ON_PCI,
-	0x00ff0000);
-  vmeUniverseMasterPortCfg(
-	2,
-	VME_AM_SUP_SHORT_IO,
-	0x00000000,
-	_VME_A16_ON_PCI,
-	0x00010000);
-
-#ifdef _VME_DRAM_OFFSET
-  /* map our memory to VME */
-  vmeUniverseSlavePortCfg(
-	0,
-	VME_AM_EXT_SUP_DATA,
-	_VME_DRAM_OFFSET,
-	PCI_DRAM_OFFSET,
-	BSP_mem_size);
-
-  /* make sure the host bridge PCI master is enabled */
-  vmeUniverseWriteReg(
-	vmeUniverseReadReg(UNIV_REGOFF_PCI_CSR) | UNIV_PCI_CSR_BM,
-	UNIV_REGOFF_PCI_CSR);
-#endif
-
-  /* stdio is not yet initialized; the driver will revert to printk */
-  vmeUniverseMasterPortsShow(0);
-  vmeUniverseSlavePortsShow(0);
-
-  /* install the VME insterrupt manager */
-  vmeUniverseInstallIrqMgr(4, 5, 8);
-  if (vmeUniverse0PciIrqLine<0)
-	BSP_panic("Unable to get interrupt line info from PCI config");
-  _BSP_vme_bridge_irq=BSP_PCI_IRQ_LOWEST_OFFSET+vmeUniverse0PciIrqLine;
+  /* VME initialization is in a separate file so apps which don't use
+   * VME or want a different configuration may link against a customized
+   * routine.
+   */
+  BSP_vme_config();
 
 #ifdef DEBUG_PROTECT_TEXT
   /* restrict the dbats to the second 256k chunk of memory */
