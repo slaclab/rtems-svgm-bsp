@@ -3,7 +3,7 @@
 /* Maintain a cache of PCI device/vendor bus scan.
  * Rationale: config read access to an empty slot
  *            triggers a master abort. Since we want
- *            to run the VGM board in 'paranoid' mode
+ *            to run the board in 'paranoid' mode
  *            with MCP enabled on hostbridge errors,
  *            this would be fatal.
  *            Therefore, we scan the bus once, at init
