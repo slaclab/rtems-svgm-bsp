@@ -457,8 +457,11 @@ struct yellowfin_private {
 	rtems_id	daemonTid;
 	rtems_id	daemonSync;				/* synchronization with the daemon */
 
-	/* statistics */
 	long 		 intr_status;			/* this field is modified by the ISR */
+	unsigned long old_iff;				/* cache the interface flags because
+										 * bsdnet updates them before calling ioctl
+										 */
+	/* statistics */
 	struct {
 		unsigned long	txReassembled;
 		unsigned long 	length_errors;
@@ -494,7 +497,7 @@ static void yellowfin_irq_off(const rtems_irq_connect_data *);
 static int yellowfin_irq_is_on(const rtems_irq_connect_data *);
 static void yellowfin_init(void *arg);
 static void yellowfin_daemon(void *arg);
-static void set_rx_mode(struct yellowfin_private *yp);
+static int set_rx_mode(struct yellowfin_private *yp);
 
 
 /* A list of installed Yellowfin devices */
@@ -643,7 +646,7 @@ rtems_yellowfin_driver_attach(struct rtems_bsdnet_ifconfig *config, int attach)
 	ifp->if_output   = ether_output;
 	ifp->if_watchdog = yellowfin_timer;
 
-	ifp->if_flags = IFF_BROADCAST | IFF_SIMPLEX;
+	np->old_iff = ifp->if_flags = IFF_BROADCAST | IFF_SIMPLEX;
 	if (ifp->if_snd.ifq_maxlen == 0)
 		ifp->if_snd.ifq_maxlen = ifqmaxlen;
 
@@ -1837,14 +1840,16 @@ static inline unsigned ether_crc_le(int length, unsigned char *data)
 }
 
 static inline void
-set_bit(int n, unsigned char *ptr)
+set_bit(int n, void *d)
 {
+unsigned char *ptr=d;
 		*(ptr+(n>>3)) |= 1<<(n&7);
 }
 
 
-static void set_rx_mode(struct yellowfin_private *yp)
+static int set_rx_mode(struct yellowfin_private *yp)
 {
+	int rval=0;
 	struct arpcom *ac = &yp->arpcom;
 	struct ifnet  *ifp = &ac->ac_if;
 	long ioaddr = yp->base_addr;
@@ -1869,7 +1874,12 @@ static void set_rx_mode(struct yellowfin_private *yp)
 		 */
 		for (i = 0, enm = ac->ac_multiaddrs; enm && i < ac->ac_multicnt;
 			 i++, enm = enm->enm_next) {
-			unsigned char *enaddr=enm->enm_ac->ac_enaddr;
+			unsigned char *enaddr=enm->enm_addrlo;
+			/* HMMM, how to deal with address ranges??? */
+			if (memcmp(enaddr, enm->enm_addrhi, ETHER_ADDR_LEN)) {
+					rval=EAFNOSUPPORT;
+					printk("WARNING: Yellowfin: multicast address ranges not supported\n");
+			}
 			/* Due to a bug in the early chip versions, multiple filter
 			   slots must be set for each address. */
 
@@ -1897,8 +1907,11 @@ static void set_rx_mode(struct yellowfin_private *yp)
 	} else {					/* Normal, unicast/broadcast-only mode. */
 		outw(0x0001, ioaddr + AddrMode);
 	}
+	/* update the cached copy */
+	yp->old_iff = ifp->if_flags;
 	/* Restart the Rx process. */
 	outw(cfg_value | 0x1000, ioaddr + Cnfg);
+	return rval;
 }
 
 
@@ -1910,15 +1923,12 @@ static void set_rx_mode(struct yellowfin_private *yp)
 
 static int yellowfin_ioctl(struct ifnet *ifp, int cmd, caddr_t arg)
 {
+	int		rval=0;
 	struct yellowfin_private *np = ifp->if_softc;
 #ifdef USE_MII_IOCTLS
 	long ioaddr = np->base_addr;
 #endif
-#if 0
-	u16 *data = (u16 *)arg;
-#else
-	/* TODO: I believe arg is a struct ifreq */
-#endif
+	struct ifreq *ifr=(struct ifreq*)arg;
 
 	if (yellowfin_debug>1)
 		printk("Yellowfin: entering ioctl...\n");
@@ -1927,6 +1937,7 @@ static int yellowfin_ioctl(struct ifnet *ifp, int cmd, caddr_t arg)
 	default:
 		if (yellowfin_debug>1)
 			printk("Yellowfin: etherioctl...\n");
+		/* handles SIOxIFADDR, SIOCSIFMTU */
 		return ether_ioctl(ifp, cmd, arg);
 
 #ifdef USE_MII_IOCTLS
@@ -1964,13 +1975,37 @@ static int yellowfin_ioctl(struct ifnet *ifp, int cmd, caddr_t arg)
 			yellowfin_init(np);
 			break;
 
+#if 0
+		/* I prefer to do nothing in this case.
+		 * if they want to restart the interface, 
+		 * they should bring it down first and then
+		 * bring it up again.
+		 */
 		case IFF_UP | IFF_RUNNING:
 			yellowfin_stop(np);
 			yellowfin_init(np);
 			break;
+#endif
 
 		default:
 			break;
+		}
+
+		if ((ifp->if_flags & IFF_PROMISC) != (np->old_iff & IFF_PROMISC))
+				set_rx_mode(np);
+		break;
+
+	case SIOCADDMULTI:
+		if (ENETRESET == (rval=ether_addmulti(ifr, &np->arpcom))) {
+				set_rx_mode(np);
+				rval=0;
+		}
+		break;
+
+	case SIOCDELMULTI:
+		if (ENETRESET == (rval=ether_delmulti(ifr, &np->arpcom))) {
+				set_rx_mode(np);
+				rval=0;
 		}
 		break;
 
@@ -1981,7 +2016,7 @@ static int yellowfin_ioctl(struct ifnet *ifp, int cmd, caddr_t arg)
 	}
 	if (yellowfin_debug>1)
 		printk("Yellowfin: leaving ioctl...\n");
-	return 0;
+	return rval;
 }
 
 static void yellowfin_stats(struct yellowfin_private *yp)
