@@ -41,6 +41,7 @@
 #include <bsp/vectors.h>
 #include <bsp/VME.h>
 #include <bsp/bspVGM.h>
+#include <bsp/bspException.h>
 #include <synergyregs.h>
 #include <libcpu/pte121.h>
 
@@ -584,7 +585,7 @@ void bsp_start( void )
 				: "0" (intrNestingLevel), "i"(SPRG0)
 			   );
   /*
-   * Initialize default raw exception hanlders. See vectors/vectors_init.c
+   * Initialize default raw exception handlers. See vectors/vectors_init.c
    */
   initialize_exceptions();
 
@@ -617,6 +618,10 @@ void bsp_start( void )
    * config_addr / config_data addresses here
    */
   InitializePCI();
+
+  /* Install our own exception handler (needs PCI) */
+  globalExceptHdl = BSP_exceptionHandler;
+
   /* now build the pci device cache which supports BSP_pciFindDevice() */
   _BSP_pciCacheInit();
   /* read board info registers */
@@ -652,7 +657,7 @@ void bsp_start( void )
   _BSP_clear_hostbridge_errors(0/*enableMCP*/,1/*quiet*/);
   _BSP_clear_hostbridge_errors(0/*enableMCP*/,1/*quiet*/);
   _BSP_clear_hostbridge_errors(1/*enableMCP*/,0/*quiet*/);
-
+  BSPsetDABR(0x04000000,7);
 
   /* Allocate and set up the page table mappings.
    * This is done in an extra file giving applications

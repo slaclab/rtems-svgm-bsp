@@ -28,6 +28,15 @@ include $(top_srcdir)/../../../../../../automake/lib.am
 $(PROJECT_RELEASE)/lib/linkcmds: linkcmds
 	$(INSTALL_DATA) $< $@
 
+$(PROJECT_INCLUDE)/bsp:
+	$(mkinstalldirs) $@
+
+$(PROJECT_INCLUDE)/bsp/%.h: %.h
+	$(INSTALL_DATA) $< $@
+
+PREINSTALL_FILES = $(PROJECT_INCLUDE)/bsp \
+    $(H_FILES:%.h=$(PROJECT_INCLUDE)/bsp/%.h)
+
 # FIXME: This should not be here
 # $(PROJECT_RELEASE)/lib/libbsp.a:
 #	cd ../wrapup; $(MAKE) $(AM_MAKEFLAGS)
