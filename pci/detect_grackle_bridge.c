@@ -25,6 +25,7 @@
 
 #define PICR1				0xa8	/* LONG register */
 #define PICR1_MCP_EN			(1<<11)
+#define PICR1_TEA_EN			(1<<10)
 
 #define ERRENR1				0xc0	/* BYTE register */
 #define ERRENR1_60X_BUS_ERR		(1<<0)
@@ -44,8 +45,6 @@
 extern pci_config_access_functions pci_direct_functions;
 extern pci_config_access_functions pci_indirect_functions;
 
-SPR_RW(HID0)
-
 /* clear all error flags adhering to the algorithm
  * recommended by motorola - MPC106 user's manual
  * sect. 9.3.3.3
@@ -58,37 +57,46 @@ SPR_RW(HID0)
 unsigned long
 _BSP_clear_hostbridge_errors(int enableMCP, int quiet)
 {
-unsigned long	rval;
+unsigned long	rval, status;
 unsigned int	picr1;
 unsigned char	errenR1,errdr1,errdr2;
 unsigned short	pcistat,pcistat_orig;
 int				count;
 	/* disable MCP interrupt generation PICR1[MCP_EN]=0 */
 	pci_read_config_dword(0,0,0,PICR1,  &picr1);
-	pci_write_config_dword(0,0,0,PICR1, picr1 & ~PICR1_MCP_EN);
+	pci_write_config_dword(0,0,0,PICR1, picr1 & ~(PICR1_MCP_EN|PICR1_TEA_EN));
 
 	pci_read_config_byte(0,0,0,ERRENR1,  &errenR1);
-	pci_write_config_byte(0,0,0,ERRENR1, errenR1 & ~ERRENR1_60X_BUS_ERR);
+	pci_write_config_byte(0,0,0,ERRENR1, errenR1 & ~ERRENR1_PCI_MAS_ABT);
 
 	/* read error status for info return */
 	pci_read_config_word(0,0,0,PCI_STATUS,&pcistat_orig);
 	pci_read_config_byte(0,0,0,ERRDR1,&errdr1);
 	pci_read_config_byte(0,0,0,ERRDR2,&errdr2);
 
-	count=200;
+	count=10;
 	do {
-		/* clear error reporting registers */
-		pci_write_config_byte(0,0,0,ERRDR1,ERRDR_CLR_ALL);
-		rtems_bsp_delay(5);
-		pci_write_config_byte(0,0,0,ERRDR2,ERRDR_CLR_ALL);
-		rtems_bsp_delay(5);
-
+#define CLEAR_PCI_STATUS_FIRST
+		/* although the MPC106 manual states that we should
+		 * read ERRDR1/2 first, then PCI_STATUS and then
+		 * read back PCI_STATUS, I found that it is more
+		 * reliable on the VGM to write PCI_STATUS first
+		 * then write ERRDR and finally read PCI_STATUS back...
+		 */
+#ifdef CLEAR_PCI_STATUS_FIRST
 		/* clear PCI status register */
 		pci_write_config_word(0,0,0,PCI_STATUS, 0xffff);
-		rtems_bsp_delay(5);
+#endif
+		/* clear error reporting registers */
+		pci_write_config_byte(0,0,0,ERRDR1,ERRDR_CLR_ALL);
+		pci_write_config_byte(0,0,0,ERRDR2,ERRDR_CLR_ALL);
+
+#ifndef CLEAR_PCI_STATUS_FIRST
+		/* clear PCI status register */
+		pci_write_config_word(0,0,0,PCI_STATUS, 0xffff);
+#endif
 		pci_read_config_word(0,0,0,PCI_STATUS, &pcistat);
-		rtems_bsp_delay(5);
-	} while ( ! ERR_STATUS_GRCKL_OK(pcistat) && --count);
+	} while ( ! ERR_STATUS_GRCKL_OK(pcistat) && count-- );
 
 	/* we also read 4 words off the machine check vector
 	 * location to make sure the Grackle has seen
@@ -110,27 +118,30 @@ int				count;
 
 	rval = (errdr2<<24) | (errdr1<<16) | pcistat_orig;
 
-	if (!ERR_STATUS_GRCKL_OK(rval) && !quiet) {
+	pci_read_config_byte(0,0,0,ERRDR1,&errdr1);
+	pci_read_config_byte(0,0,0,ERRDR2,&errdr2);
+
+	status = (errdr2<<24) | (errdr1<<16) | pcistat;
+
+	if ( !ERR_STATUS_GRCKL_OK(rval) && !quiet) {
 		printk("Cleared Grackle errors: pci_stat was 0x%04x errdr1 0x%02x errdr2 0x%02x\n",
 					pcistat_orig, errdr1, errdr2);
   	}
 
-	if (ERR_STATUS_GRCKL_OK(rval) && enableMCP) {
+	if ( ERR_STATUS_GRCKL_OK(status) && enableMCP) {
 		/* re-enable error/MCP generation */
 		if (!quiet)
-			printk("Enabling MCP generation on hostbridge errors\n");
+			printk("Enabling MCP and TEA generation on hostbridge errors\n");
 #if 0 /* restore original settings */
 		pci_write_config_byte(0,0,0,ERRENR1, errenR1 | ERRENR1_60X_BUS_ERR);
 #else /* enable MCP on all errors - paranoia setting */
 		pci_write_config_byte(0,0,0,ERRENR1,0xff);
 		pci_write_config_byte(0,0,0,ERRENR2,0x81);
 #endif
-		pci_write_config_dword(0,0,0,PICR1,picr1 | PICR1_MCP_EN);
-		/* enable MCP interrupt */
-		_write_HID0(_read_HID0() | HID0_EMCP);
+		pci_write_config_dword(0,0,0,PICR1,picr1 | (PICR1_MCP_EN|PICR1_TEA_EN));
 	} else {
 		if (!quiet && enableMCP) {
-			printk("leaving MCP interrupt disabled\n");
+			printk("leaving MCP and TEA interrupts disabled\n");
 		}
 	}
 	return rval;
@@ -139,11 +150,6 @@ int				count;
 void detect_host_bridge()
 {
   unsigned int id0;
-
-  /* Disable MCP interrupts at CPU level; scanning the PCI configuration space
-   * will result in master-aborts.
-   */
-  _write_HID0(_read_HID0() & ~ HID0_EMCP);
 
   /* setup the correct address configuration */
   BSP_pci_configuration.pci_config_addr = (void*)_GRACKLE_PCI_CONFIG_ADDR;
