@@ -32,7 +32,8 @@
  *  4) setup RTEMS environment (initial register values), most 
  *     notably an initial STACK. The initial stack may be small and
  *     is used by RTEMS only at a very early stage.
- *     A safe place for the stack seems to be the 00..0x100 area.
+ *     A safe place for the stack seems to be the 00..0x7f area.
+ *     NOTE: we should respect the MAILBOX area 0x80..0xff!
  *  5) switch the MMU off (because that's what RTEMS is expecting
  *     it to be at startup).
  *  6) fire up rtems...
@@ -66,6 +67,7 @@
  *    address is cache block aligned.
  *    Furthermore, the byte count is assumed to be a multiple
  *    of four
+ *
  */
 #if 0
 /* TODO: I dont know where the appropriate CPU model is to be defined
@@ -85,7 +87,7 @@
  * if DESTINATION_ADDR is not 0
  */
 #define KERNELBASE			0x0
-#define INITIAL_STACK		0xf8					/* 8-byte aligned */
+#define INITIAL_STACK		0x78					/* 8-byte aligned */
 #define CACHE_LINE_SIZE		PPC_CACHE_ALIGNMENT 	/* autodetect doesn't work, see below */
 #define	ASSUME_RTEMS_INSTALLS_VECTORS				/* assume we need not load vectors */
 #define DONT_USE_R5_ENTRY							/* always dynamically determine the address we're running from */
@@ -98,42 +100,20 @@
 	PUBLIC_VAR(__rtems_entry_point)
 	PUBLIC_VAR(__rtems_end)
 	.section .svgm_preloader_section,"awx",@progbits
-preloader:
-	/* check if we are where we think we are, i.e.
-	 * 'here' should be at the address we got passed
-	 * in r5 + 4.
-	 */
+preload:
+	/* find out where we are */
 	bl	here
 here:
-#ifdef DONT_USE_R5_ENTRY
 	mflr	r5
-	addi	r5,r5,-(here-preloader)
+	addi	r5,r5,-(here-preload)
 	lis		r27,_edata@h
 	ori		r27,r27,_edata@l
-#else /* DONT_USE_R5_ENTRY */
-	mr		r0,r5
-	mflr	r5
-	addi	r5,r5,-(here-preloader)
-	cmpwi	r0,0			/* omit the check if r5==0 */
-	beq		no_check
-	cmpw	r0,r5
-	bne		panic
 
-no_check:
-	cmpwi   r6,0
-	bne		has_img_len
-	lis		r27,_edata@h
-	ori		r27,r27,_edata@l
-	b		use_edata
-has_img_len:
-	sub		r27,r6,r5		/* save image length */
-use_edata:
-#endif /* DONT_USE_R5_ENTRY */
 	/* at this point the register contents are
 	 * R3:  command line start
 	 * R4:  R3 + command line length
 	 * R5:  address we are running from / loaded to 
-	 * R27: image size
+	 * R27: image end
 	 */
 
 	/* save command line start */
@@ -180,15 +160,14 @@ leaveparms:
 	 * nice routine doesn't work...
 	 */
 	/* figure out the cache line size */
-	li		r16, 0x100
-	cmpw	r5, r16			/* 'from' must be > 0x100 */
+	li		r16, 0x80
+	cmpw	r5, r16			/* 'from' must be > 0x80 */
 	blt		panic
 	
-1:	/* store some arbitrary, nonzero stuff in 0..0xfc */
+1:	/* store some arbitrary, nonzero stuff in 0..0x7c */
 	stwu	r16,-4(r16)
 	cmpwi	r16,0
 	bne		1b
-	sync					/* make sure it's there */
 	dcbz	0,r16			/* zero out one cache line */
 	subi	r16,r16,4
 2:	lwzu	r0,4(r16)		/* search for a non-zero word */
@@ -199,14 +178,16 @@ leaveparms:
 	li		r16,CACHE_LINE_SIZE
 #endif
 	
-	li		r3,KERNELBASE
+    lis		r3,preload@h
+	ori		r3,r3,preload@l
 	mr		r4,r5			/* from-addr */
 	li		r5,_preload_size/* this is never > 16k */
-	/* now move ourselves to KERNELBASE.
+	/* now move ourselves to the link address ('preload').
 	 * We set up the LR, so domove() 'returns' to the
 	 * relocated copy
 	 */
-	li		r0,return_here@l
+	lis		r0,return_here@h
+	ori		r0,r0,return_here@l
 	mtlr	r0	
 	b		domove			/* move the preloader itself */
 return_here:
@@ -214,9 +195,10 @@ return_here:
 #ifdef ASSUME_RTEMS_INSTALLS_VECTORS
 	lis		r3,__rtems_start@h
 	ori		r3,r3,__rtems_start@l
-	add		r4,r4,r3		/* should add __rtems_start - KERNELBASE
-							 * but that is 0
-							 */
+	lis		r0,preload@h	/* calculate/adjust from address */
+	ori		r0,r0,preload@l
+	sub		r0,r3,r0
+	add		r4,r4,r0
 	sub		r5,r27,r3
 #else
 	add		r3,r3,r5		/* add preloader size to destination */
@@ -253,6 +235,8 @@ domove:
 	addi	r0,r5,3			/* convert to word count */
 	srwi.	r0,r0,2
 	beq	3f					/* nothing to do */
+	cmpw	r3,r4			/* from == to ?  */
+	beq 3f
 	mtctr	r0
 	la		r18,-4(r4)
 	la		r17,-4(r3)
@@ -281,7 +265,7 @@ domove:
 3:
 	blr
 
-#if !defined(CACHE_LINE_SIZE) || !defined(DONT_USE_R5_ENTRY)
+#if !defined(CACHE_LINE_SIZE)
 panic:
 	li		r10,0x63
 	mfmsr	r0
@@ -291,4 +275,4 @@ panic:
 #endif
 
 /* DONT PUT ANY CODE BELOW HERE */
-_preload_size = . - preloader
+_preload_size = . - preload
