@@ -35,11 +35,9 @@
 #define inport_byte(port,value)
 #define inport_word(port,value)
 #define inport_long(port,value)
+
 /*
- * Vital Board data Start using DATA RESIDUAL
- */
-/*
- * Total memory using RESIDUAL DATA
+ * Total memory read from board register
  */
 extern unsigned int BSP_mem_size;
 /*
@@ -61,10 +59,13 @@ extern unsigned int BSP_time_base_divisor;
 extern rtems_configuration_table  BSP_Configuration;
 extern void BSP_panic(char *s);
 extern void rtemsReboot(void);
-/* extern int printk(const char *, ...) __attribute__((format(printf, 1, 2))); */
 extern int BSP_disconnect_clock_handler (void);
 extern int BSP_connect_clock_handler (void);
 
+#define RTEMS_BSP_NETWORK_DRIVER_NAME	"es"
+#define RTEMS_BSP_NETWORK_DRIVER_ATTACH	rtems_yellowfin_driver_attach
+extern int
+RTEMS_BSP_NETWORK_DRIVER_ATTACH(struct rtems_bsdnet_ifconfig *);
 
 #endif
 
