@@ -4,15 +4,15 @@
 
 VPATH = @srcdir@:@srcdir@/../../shared/console:@srcdir@/../../../shared
 
-C_FILES = polled_io.c uart.c console.c
+C_FILES = uart.c console.c
 C_O_FILES = $(C_FILES:%.c=$(ARCH)/%.$(OBJEXT))
 
-H_FILES = ../../shared/console/consoleIo.h ../../shared/console/uart.h
+H_FILES = ../../shared/console/uart.h
 
 OBJS = $(C_O_FILES)
 
 include_bspdir = $(includedir)/bsp
-include_bsp_HEADERS = ../../shared/console/consoleIo.h ../../shared/console/uart.h
+include_bsp_HEADERS = ../../shared/console/uart.h
 
 include $(top_srcdir)/../../../../../../automake/compile.am
 include $(top_srcdir)/../../../../../../automake/lib.am
@@ -20,14 +20,10 @@ include $(top_srcdir)/../../../../../../automake/lib.am
 $(PROJECT_INCLUDE)/bsp:
 	$(mkinstalldirs) $@
 
-$(PROJECT_INCLUDE)/bsp/consoleIo.h: ../../shared/console/consoleIo.h
-	$(INSTALL_DATA) $< $@
-
 $(PROJECT_INCLUDE)/bsp/uart.h: ../../shared/console/uart.h
 	$(INSTALL_DATA) $< $@
 
 PREINSTALL_FILES = $(PROJECT_INCLUDE)/bsp
-PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/consoleIo.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/uart.h
 
 AM_CPPFLAGS += -DSTATIC_LOG_ALLOC

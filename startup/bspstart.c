@@ -28,7 +28,6 @@
 #include <bsp.h>
 #include <rtems/libio.h>
 #include <rtems/libcsupport.h>
-#include <bsp/consoleIo.h>
 #include <bsp/uart.h>
 #include <libcpu/spr.h>
 #include <bsp/pci.h>
@@ -68,6 +67,8 @@ _bsp_sbrk_init(rtems_unsigned32 heap_start, rtems_unsigned32 *heap_size_p);
 
 /* provide access to the command line parameters */
 char *BSP_commandline_string = 0;
+
+BSP_output_char_function_type BSP_output_char = BSP_output_char_via_serial;
 
 #define USE_BOOTP_STUFF
 
@@ -548,8 +549,6 @@ CmdLine future_heap=(CmdLine)heapStart();
  *  This routine does the bulk of the system initialization.
  */
 
-int _BSP_vme_bridge_irq=-1;
-
 void bsp_start( void )
 {
   unsigned char				*stack;
@@ -668,9 +667,6 @@ void bsp_start( void )
    * Initialize default raw exception handlers. See vectors/vectors_init.c
    */
   initialize_exceptions();
-
-  /* initialize the polled console; only now, we can start printing messages */
-  select_console(CONSOLE_SERIAL);
 
   if (!(chpt=BSP_boardType())) {
 		  BSP_panic("Unknown Synergy Board Type");

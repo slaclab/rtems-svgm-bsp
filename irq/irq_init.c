@@ -14,7 +14,6 @@
  *
  *  $Id$
  */
-#include <bsp/consoleIo.h>
 #include <libcpu/io.h>
 #include <libcpu/spr.h>
 #include <bsp/pci.h>
@@ -59,10 +58,11 @@ static rtems_irq_prio irqPrioTable[BSP_IRQ_NUMBER]={
    *	0   means that only current interrupt is masked
    *	255 means all other interrupts are masked
    */
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* these are placeholders; nothing's there */
   /*
    * PCI Interrupts
    */
-  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, /* for raven prio 0 means unactive... */
+  8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, /* for raven prio 0 means unactive... */
   /*
    * Processor exceptions handled as interrupts
    */
