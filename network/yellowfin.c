@@ -1961,12 +1961,17 @@ static int yellowfin_ioctl(struct ifnet *ifp, int cmd, caddr_t arg)
 
 	case SIOCSIFMEDIA:
 		{
-			int media = ifr->ifr_media, cap, spd, duplx;
+			int media = ifr->ifr_media, cap, spd, duplx, phy;
 			
 			if ( IFM_ETHER != IFM_TYPE(media) )
 				return EINVAL;
 
-			spd = cap = mdio_read(ioaddr, IFM_INST(media), 1);
+			if ( ((unsigned)IFM_INST(media)) >= np->mii_cnt )
+				return ENXIO;
+
+			phy = np->phys[IFM_INST(media)];
+
+			spd = cap = mdio_read(ioaddr, phy, 1);
 
 			if ( 0xffff == cap || 0x0000 == cap )
 				return ENXIO;
@@ -2008,7 +2013,7 @@ static int yellowfin_ioctl(struct ifnet *ifp, int cmd, caddr_t arg)
 				cap = 0x1200;
 				/* in autoneg mode, let the timer set the full duplex bit */
 			} else {
-				cap  = mdio_read(ioaddr, IFM_INST(media), 0);
+				cap  = mdio_read(ioaddr, phy, 0);
 				cap &= ~0x1000; /* no autoneg */
 				np->medialock   = 1;
 				np->duplex_lock = 1;
@@ -2024,7 +2029,7 @@ static int yellowfin_ioctl(struct ifnet *ifp, int cmd, caddr_t arg)
 			}
 			/* TODO: probably should update the advertisement register */
 
-			mdio_write(ioaddr, IFM_INST(media), 0, cap);
+			mdio_write(ioaddr, phy, 0, cap);
 		}
 		return 0;
 
