@@ -1836,6 +1836,12 @@ static inline unsigned ether_crc_le(int length, unsigned char *data)
 	return crc;
 }
 
+static inline void
+set_bit(int n, unsigned char *ptr)
+{
+		*(ptr+(n>>3)) |= 1<<(n&7);
+}
+
 
 static void set_rx_mode(struct yellowfin_private *yp)
 {
@@ -1866,6 +1872,10 @@ static void set_rx_mode(struct yellowfin_private *yp)
 			unsigned char *enaddr=enm->enm_ac->ac_enaddr;
 			/* Due to a bug in the early chip versions, multiple filter
 			   slots must be set for each address. */
+
+			/* NOTE: the original (linux) set_bit is probably _not_
+			 *       endian safe!
+			 */
 			if (yp->drv_flags & HasMulticastBug) {
 				set_bit((ether_crc_le(3, enaddr) >> 3) & 0x3f,
 						hash_table);
