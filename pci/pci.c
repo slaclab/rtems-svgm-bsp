@@ -45,6 +45,9 @@ indirect_pci_read_config_byte(unsigned char bus, unsigned char slot,
 	out_be32((unsigned int*) pci.pci_config_addr, 
 		 0x80|(bus<<8)|(PCI_DEVFN(slot,function)<<16)|((offset&~3)<<24));
 	*val = in_8(pci.pci_config_data + (offset&3));
+#ifdef PCI_DEBUG
+	printk("reading %i/%i/%i(%i): 0x%02x\n",bus,slot,function,offset,*val);
+#endif
 	return PCIBIOS_SUCCESSFUL;
 }
 
@@ -57,6 +60,9 @@ indirect_pci_read_config_word(unsigned char bus, unsigned char slot,
 	out_be32((unsigned int*) pci.pci_config_addr, 
 		 0x80|(bus<<8)|(PCI_DEVFN(slot,function)<<16)|((offset&~3)<<24));
 	*val = in_le16((volatile unsigned short *)(pci.pci_config_data + (offset&3)));
+#ifdef PCI_DEBUG
+	printk("reading %i/%i/%i(%i): 0x%04x\n",bus,slot,function,offset,*val);
+#endif
 	return PCIBIOS_SUCCESSFUL;
 }
 
@@ -69,6 +75,9 @@ indirect_pci_read_config_dword(unsigned char bus, unsigned char slot,
 	out_be32((unsigned int*) pci.pci_config_addr, 
 		 0x80|(bus<<8)|(PCI_DEVFN(slot,function)<<16)|(offset<<24));
 	*val = in_le32((volatile unsigned int *)pci.pci_config_data);
+#ifdef PCI_DEBUG
+	printk("reading %i/%i/%i(%i): 0x%08x\n",bus,slot,function,offset,*val);
+#endif
 	return PCIBIOS_SUCCESSFUL;
 }
 
@@ -232,7 +241,7 @@ void detect_host_bridge()
 #endif
     /* On all direct bridges I know the host bridge itself
      * appears as device 0 function 0. 
-		 */
+     */
     pci_read_config_dword(0, 0, 0, PCI_VENDOR_ID, &id0);
     if (id0==~0U) {
 	    BSP_panic("Unable to detect host bridge");
