@@ -43,6 +43,8 @@
 extern pci_config_access_functions pci_direct_functions;
 extern pci_config_access_functions pci_indirect_functions;
 
+#define HID0_MCP_ENABLE			0x80000000
+
 static inline unsigned long
 MFHID0(void)
 {
@@ -139,9 +141,9 @@ int				count;
 #endif
 		pci_write_config_dword(0,0,0,PICR1,picr1 | PICR1_MCP_EN);
 		/* enable MCP interrupt */
-		MTHID0(MFHID0()|0x80000000);
+		MTHID0(MFHID0() | HID0_MCP_ENABLE);
 	} else {
-		if (!quiet) {
+		if (!quiet && enableMCP) {
 			printk("leaving MCP interrupt disabled\n");
 		}
 	}
@@ -152,6 +154,11 @@ void detect_host_bridge()
 {
   unsigned int id0;
 
+  /* Disable MCP interrupts at CPU level; scanning the PCI configuration space
+   * will result in master-aborts.
+   */
+  MTHID0(MFHID0() & ~ HID0_MCP_ENABLE);
+
   /* setup the correct address configuration */
   BSP_pci_configuration.pci_config_addr = (void*)_GRACKLE_PCI_CONFIG_ADDR;
   BSP_pci_configuration.pci_config_data = (void*)_GRACKLE_PCI_CONFIG_DATA;
@@ -160,7 +167,7 @@ void detect_host_bridge()
    *     sure if it applies, though...
    * This code assumes that the host bridge is located at
    * bus 0, dev 0, func 0 AND that the old pre PCI 2.1
-   * standart devices detection mecahnism that was used on PC
+   * standart devices detection mechanism that was used on PC
    * (still used in BSD source code) works.
    */
   {
