@@ -153,7 +153,7 @@ MODULE_PARM(gx_fix, "i");
 #endif
 
 #include <rtems.h>
-#include <bspIo.h>						/* printk */
+#include <rtems/bspIo.h>				/* printk */
 #include <stdio.h>						/* printf for statistics */
 #include <string.h>
 #include <bsp/irq.h>

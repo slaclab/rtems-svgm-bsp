@@ -8,7 +8,7 @@
 #include <libcpu/io.h>
 #include <bsp/pci.h>
 #include <bsp.h>
-#include <bspIo.h> /* printk */
+#include <rtems/bspIo.h> /* printk */
 
 #ifndef _GRACKLE_PCI_CONFIG_ADDR
 #define _GRACKLE_PCI_CONFIG_ADDR 0xfec00000
