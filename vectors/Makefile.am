@@ -6,10 +6,10 @@ AUTOMAKE_OPTIONS = foreign 1.4
 
 VPATH = @srcdir@:@srcdir@/../console:@srcdir@/../../shared/vectors
 
-C_FILES = vectors_init.c
+C_FILES = vectors_init.c exceptionhandler.c
 C_O_FILES = $(C_FILES:%.c=$(ARCH)/%.o)
 
-H_FILES = ../../shared/vectors/vectors.h
+H_FILES = ../../shared/vectors/vectors.h bspException.h
 
 S_FILES = vectors.S
 S_O_FILES = $(S_FILES:%.S=$(ARCH)/%.o)
@@ -23,6 +23,8 @@ include $(top_srcdir)/../../../../../../automake/lib.am
 #
 # (OPTIONAL) Add local stuff here using +=
 #
+
+EXTRA_DIST = bspException.h exceptionhandler.c
 
 $(PGM): $(OBJS)
 	$(make-rel)
