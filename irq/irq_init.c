@@ -83,7 +83,7 @@ void BSP_rtems_irq_mng_init(unsigned cpuId)
 #ifdef TRACE_IRQ_INIT  
   printk("Going to scan the PCI bus for the IBM MPIC\n");
 #endif       
-  if ( bspExtPciFindDevice(PCI_VENDOR_ID_IBM,
+  if ( BSP_pciFindDevice(PCI_VENDOR_ID_IBM,
 	  		PCI_DEVICE_ID_IBM_MPIC,
 			0,
 			&bus,
@@ -101,7 +101,8 @@ void BSP_rtems_irq_mng_init(unsigned cpuId)
 #ifdef TRACE_IRQ_INIT  
   printk("Going to initialize interrupt controller (openpic compliant)\n");
 #endif       
-  openpic_init(1);
+  /* use default polarity (0) and senses (1==level) */
+  openpic_init(1,0,0);
 
 #ifdef TRACE_IRQ_INIT  
   printk("Going to re-initialize the rtemsIrq table\n");

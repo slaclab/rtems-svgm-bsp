@@ -29,7 +29,7 @@
 
 #ifndef ASM
 
-
+#include <libchip/vmeUniverse.h>
 /*
  * Symbolic IRQ names and related definitions.
  */
@@ -88,6 +88,7 @@ typedef enum {
      * Some PCI IRQ symbolic name definition
      */
   BSP_PCI_IRQ0			=	BSP_PCI_IRQ_LOWEST_OFFSET,
+
   /* must never detect a ISA irq on the SVGM */
   BSP_PCI_ISA_BRIDGE_IRQ	=	0xdeadbeef,
     /*
@@ -97,6 +98,13 @@ typedef enum {
   
 }rtems_irq_symbolic_name;
 
+#define BSP_PCI_VME_BRIDGE_DOES_EOI
+extern int _BSP_vme_bridge_irq;
+/* don't reference vmeUniverse0PciIrqLine directly here - leave it up to
+ * bspstart() to set BSP_vme_bridge_irq. That way, we can generate variants
+ * of the BSP with / without the universe driver...
+ */
+#define BSP_PCI_VME_BRIDGE_IRQ _BSP_vme_bridge_irq
     
 
 
