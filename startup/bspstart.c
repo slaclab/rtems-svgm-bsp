@@ -42,11 +42,7 @@ extern void set_L2CR(unsigned);
 extern void bsp_cleanup(void);
 
 #define  SHOW_MORE_INIT_SETTINGS
-/*
- * Copy Additional boot param passed by boot loader
- */
-#define MAX_LOADER_ADD_PARM 80
-char loaderParam[MAX_LOADER_ADD_PARM];
+
 /*
  * Vital Board data Start using DATA RESIDUAL
  */
@@ -159,9 +155,7 @@ void zero_bss()
 
 void save_boot_params(void *r3, void *r4, void* r5, char *additional_boot_options)
 {
-  
-  strncpy(loaderParam, additional_boot_options, MAX_LOADER_ADD_PARM);
-  loaderParam[MAX_LOADER_ADD_PARM - 1] ='\0';
+  /* loader parameters not implemented by this BSP */ 
 }
 
 void
@@ -175,6 +169,7 @@ volatile unsigned char *ledreg=(volatile unsigned char*)0xffeffe80;
 }
 
 #define BPNT 0xffd4
+#undef  BPNT
 
 /*
  *  bsp_start
@@ -184,7 +179,10 @@ volatile unsigned char *ledreg=(volatile unsigned char*)0xffeffe80;
 
 void bsp_start( void )
 {
-  int err,bpval;
+  int err;
+#ifdef BPNT
+  int bpval = *(int*)BPNT;
+#endif
   unsigned char *stack;
   unsigned long *r1sp;
   unsigned l2cr;
@@ -194,7 +192,6 @@ void bsp_start( void )
   ppc_cpu_id_t myCpu;
   ppc_cpu_revision_t myCpuRevision;
 
-  bpval=*(int*)BPNT;
   /*
    * Get CPU identification dynamically. Note that the get_ppc_cpu_type() function
    * store the result in global variables so that it can be used latter...
@@ -208,6 +205,7 @@ void bsp_start( void )
   setdbat(1, 0xf0000000, 0xf0000000, 0x10000000, IO_PAGE);
 
 
+#ifdef TSILLBLAH
   /*
    * enables L1 Cache. Note that the L1_caches_enables() codes checks for
    * relevant CPU type so that the reason why there is no use of myCpu...
@@ -223,6 +221,7 @@ void bsp_start( void )
 #endif  
   if ( (! (l2cr & 0x80000000)) && ((int) l2cr == -1))
     set_L2CR(0xb9A14000);
+#endif
   /*
    * the initial stack  has already been set to this value in start.S
    * so there is no need to set it in r1 again... It is just for info
@@ -261,7 +260,9 @@ void bsp_start( void )
    * Initialize default raw exception hanlders. See vectors/vectors_init.c
    */
   initialize_exceptions();
+#ifdef BPNT
   BSPsetDABR(BPNT, 0x6);
+#endif
 
 #if 0
   /*
@@ -288,12 +289,14 @@ void bsp_start( void )
   err = kbdreset();
   if (err) select_console(CONSOLE_SERIAL);
 
+#ifndef TSILLBLAH
+  printk("WARNING: HACK DISABLED CACHES FOR THIS BSP\n");
+#endif
   
   printk("-----------------------------------------\n");
   printk("Welcome to %s on %s\n", _RTEMS_version, "SVGM");
   printk("-----------------------------------------\n");
 #ifdef SHOW_MORE_INIT_SETTINGS  
-  printk("Additionnal boot options are %s\n", loaderParam);
   printk("Initial system stack at %x\n",stack);
   __asm__ __volatile__ ("mr %0, %%r1":"=r"(stack));
   printk("(R1 stack pointer is 0x%08x)\n", stack);
@@ -340,6 +343,7 @@ void bsp_start( void )
   BSP_processor_frequency		= 366000000; /* TODO */
   BSP_time_base_divisor			= 4000; /* TODO */
   BSPBaseBaud				= 9600*156; /* TODO, found by experiment */
+  /* TODO set openpic timer frequency */
   
   /*
    * Set up our hooks
@@ -395,12 +399,9 @@ void bsp_start( void )
   }
 #endif
 #ifdef SHOW_MORE_INIT_SETTINGS
+#ifdef BPNT
   printk("*BPNT is 0x%08x\n",bpval);
+#endif
   /* printk("Exit from bspstart 0x%08x\n",*(unsigned long*)(0xffe4)); */
 #endif  
-  /* CRASH:
-   * BSP_panic @ 0x58c8, 0x58b8, 0x58bc, 0x58a8
-   * NO CRASH:
-   * BSP_panic @
-   */
 }
