@@ -1,4 +1,4 @@
-/* yellowfin.c: A Packet Engines G-NIC ethernet driver for linux. */
+/* yellowfin.c: A Packet Engines G-NIC ethernet driver for RTEMS. */
 /*
 	Written 1997-2001 by Donald Becker.
 
@@ -23,10 +23,6 @@
 	http://www.scyld.com/network/yellowfin.html
 */
 
-/* TODO: stuff to export */
-char *yellowfin_driver_name="es";
-
-#define YELLOWFIN_DRIVER_NAME	yellowfin_driver_name
 #define YELLOWFIN_TASK_NAME		"yfin"
 
 /* These identify the driver base version and may not be removed. */
@@ -38,7 +34,7 @@ static const char version2[] =
 /* The user-configurable values.
    These may be modified when a driver module is loaded.*/
 
-static int yellowfin_debug = 4;			/* 1 normal messages, 0 quiet .. 7 verbose. */
+static int yellowfin_debug = 1;			/* 1 normal messages, 0 quiet .. 7 verbose. */
 /* Maximum events (Rx packets, etc.) to handle at each event reception. */
 static int max_interrupt_work = 20;
 #ifdef YF_PROTOTYPE						/* Support for prototype hardware errata. */
@@ -157,25 +153,25 @@ MODULE_PARM(gx_fix, "i");
 #endif
 
 #include <rtems.h>
-#include <bspIo.h>
+#include <bspIo.h>						/* printk */
 #include <bsp/irq.h>
-#include <libcpu/byteorder.h>	/* st_le32 & friends */
-#include <libcpu/io.h>			/* inp & friends */
+#include <libcpu/byteorder.h>			/* st_le32 & friends */
+#include <libcpu/io.h>					/* inp & friends */
 /* TODO: fix this ugly hack */
 #ifdef _IO_BASE
 #undef _IO_BASE
 #endif
-#define _IO_BASE	0xfe000000	/* CHRP IO_BASE */
+#define _IO_BASE	0xfe000000			/* CHRP IO_BASE */
 #define virt_to_bus(addr)	((addr))	/* on CHRP :-) */
 #define bus_to_virt(addr)	((addr))	/* on CHRP :-) */
 #define le32_to_cpu(var)	ld_le32((volatile unsigned *)&var)
 #ifdef __PPC
 #define get_unaligned(addr)	(*(addr))
 #endif
+
 #include <rtems/error.h>
 #include "yf_rtemscompat.h"
 #include <bsp/pci.h>
-#include <stdlib.h>				/* malloc */
 #include <rtems/rtems_bsdnet.h>
 
 #include <sys/param.h>
@@ -188,21 +184,40 @@ MODULE_PARM(gx_fix, "i");
 #include <netinet/if_ether.h>
 
 /* RTEMS event to kill the daemon */
-#define KILL_EVENT	RTEMS_EVENT_1
+#define KILL_EVENT		RTEMS_EVENT_1
 /* RTEMS event to restart the transmitter */
 #define RESTART_EVENT	RTEMS_EVENT_2
 /* RTEMS events used by the ISR */
-#define RX_EVENT	RTEMS_EVENT_3
-#define TX_EVENT	RTEMS_EVENT_4
-#define ERR_EVENT	RTEMS_EVENT_5
+#define RX_EVENT		RTEMS_EVENT_3
+#define TX_EVENT		RTEMS_EVENT_4
+#define ERR_EVENT		RTEMS_EVENT_5
 
 #define ALL_EVENTS (KILL_EVENT|RESTART_EVENT|RX_EVENT|TX_EVENT|ERR_EVENT)
 
-#ifdef malloc
-#undef malloc	/* bsdnet redefines malloc to its own rtems_bsdnet_malloc
-				 * which we _dont_ want to use for allocating the drivers
-				 * private memory
-				 */
+/* NOTE: (surprise...)
+ * bsdnet redefines malloc to its own rtems_bsdnet_malloc
+ */
+
+/* TODO, for the moment, the synergy method is hardcoded
+ *       should the driver be moved out to the libchip dir,
+ *       then we must probably invoke a BSP specific routine here
+ */
+#ifndef BSP_YELLOWFIN_SUPPLY_HWADDR
+#define BSP_YELLOWFIN_SUPPLY_HWADDR(dest, instance) svgm_get_hwaddr(dest,instance)	
+
+/* only one instance supported */
+static void
+svgm_get_hwaddr(unsigned char *dest,int instance)
+{
+unsigned char	*nvram_id=(unsigned char*)0xffe9e778;
+int 		i;
+	/* first three bytes are the SYNERGY manufacturer ID */
+	*(dest++)=0x00;
+	*(dest++)=0x80;
+	*(dest++)=0xF6;
+	for (i=0; i<3; i++)
+		*dest++ = *nvram_id++;
+}
 #endif
 
 /* map pci interrupt to 'name' [the shared PPC irq interface could be better designed] */
@@ -452,7 +467,9 @@ struct yellowfin_private {
 };
 
 
+#ifndef BSP_YELLOWFIN_SUPPLY_HWADDR
 static int read_eeprom(long ioaddr, int location);
+#endif
 static int mdio_read(long ioaddr, int phy_id, int location);
 static void mdio_write(long ioaddr, int phy_id, int location, int value);
 static int yellowfin_ioctl(struct ifnet *ifp, int cmd, caddr_t data);
@@ -511,6 +528,12 @@ rtems_yellowfin_driver_attach(struct rtems_bsdnet_ifconfig *config, int attach)
 		unit = 0;
 	}
 
+    printk("Yellowfin: A Packet Engines G-NIC ethernet driver for RTEMS\n\n");
+	printk("Copyright 1997-2001, Donald Becker <becker@scyld.com>\n");
+	printk("               2001, Till Straumann <strauman@slac.stanford.edu>\n");
+	printk("LICENSE:   This driver is released under the terms of the GPL,\n");
+    printk("           consult http://www.gnu.org for details\n");
+
 	/* scan the PCI bus */
 	for (i=0; pci_id_tbl[i].name; i++) {
 		if (0==bspExtPciFindDevice(pci_id_tbl[i].vendor,
@@ -537,7 +560,7 @@ rtems_yellowfin_driver_attach(struct rtems_bsdnet_ifconfig *config, int attach)
 	pci_read_config_byte(pciB, pciD, pciF, PCI_INTERRUPT_LINE, &irq);
 
 	printk("%s: %s type %8x at 0x%lx, ",
-		   YELLOWFIN_DRIVER_NAME, pci_id_tbl[i].name, inl(ioaddr + ChipRev), ioaddr);
+		   config->name, pci_id_tbl[i].name, inl(ioaddr + ChipRev), ioaddr);
 
 	/* try to read HW address from the device if not overridden
 	 * by config
@@ -546,6 +569,7 @@ rtems_yellowfin_driver_attach(struct rtems_bsdnet_ifconfig *config, int attach)
 		memcpy(hwaddr, config->hardware_address, ETHER_ADDR_LEN);
 		printk(" using MAC addr from config:");
 	} else {
+#ifndef BSP_YELLOWFIN_SUPPLY_HWADDR
 		if (drv_flags & IsGigabit)
 			for (i = 0; i < 6; i++)
 				hwaddr[i] = inb(ioaddr + StnAddr + i);
@@ -555,6 +579,9 @@ rtems_yellowfin_driver_attach(struct rtems_bsdnet_ifconfig *config, int attach)
 				hwaddr[i] = read_eeprom(ioaddr, ee_offset + i);
 		}
 		printk(" using MAC addr from device:");
+#else
+		BSP_YELLOWFIN_SUPPLY_HWADDR(hwaddr,unit);
+#endif
 	}
 	for (i = 0; i < ETHER_ADDR_LEN-1; i++)
 			printk("%02x:", hwaddr[i]);
@@ -564,7 +591,7 @@ rtems_yellowfin_driver_attach(struct rtems_bsdnet_ifconfig *config, int attach)
 	outl(0x80000000, ioaddr + DMACtrl);
 
 	/* Make certain elements e.g. descriptor lists are aligned. */
-	priv_mem = malloc(sizeof(*np) + PRIV_ALIGN);
+	priv_mem = rtems_bsdnet_malloc(sizeof(*np) + PRIV_ALIGN, M_FREE, M_NOWAIT);
 	/* Check for the very unlikely case of no memory. */
 	if (priv_mem == NULL)
 		rtems_panic("yellowfin: OUT OF MEMORY");
@@ -600,7 +627,10 @@ rtems_yellowfin_driver_attach(struct rtems_bsdnet_ifconfig *config, int attach)
 
 	ifp->if_softc = np;
 	ifp->if_unit = unit + 1;
-	ifp->if_name = YELLOWFIN_DRIVER_NAME;
+	ifp->if_name = rtems_bsdnet_malloc(strlen(config->name)+1, M_FREE, M_NOWAIT);
+	if (!ifp->if_name)
+			rtems_panic("Yellowfin: out of memory");
+	strcpy(ifp->if_name, config->name);
 	ifp->if_mtu = config->mtu ? config->mtu : ETHERMTU;
 
 	/* The Yellowfin-specific entries in the device structure. */
@@ -646,6 +676,7 @@ rtems_yellowfin_driver_attach(struct rtems_bsdnet_ifconfig *config, int attach)
 	return 1;
 }
 
+#ifndef BSP_YELLOWFIN_SUPPLY_HWADDR
 static int read_eeprom(long ioaddr, int location)
 {
 	int bogus_cnt = 10000;		/* Typical 33Mhz: 1050 ticks */
@@ -656,6 +687,7 @@ static int read_eeprom(long ioaddr, int location)
 		;
 	return inb(ioaddr + EERead);
 }
+#endif
 
 /* MII Managemen Data I/O accesses.
    These routines assume the MDIO controller is idle, and do not exit until
@@ -764,7 +796,7 @@ rtems_event_set	evs=0;
 rtems_irq_connect_data yellowfin_irq_info={
 name:	0,
 hdl:	yellowfin_isr,
-on:	yellowfin_irq_on,
+on:		yellowfin_irq_on,
 off:	yellowfin_irq_off,
 isOn:	yellowfin_irq_is_on,
 };
@@ -776,11 +808,13 @@ static int yellowfin_init_hw(struct yellowfin_private *yp)
 	struct ifnet *ifp = &yp->arpcom.ac_if;
 	int i;
 
-	printk("Yellowfin: entering init_hw...\n");
+	if (yellowfin_debug > 1)
+		printk("Yellowfin: entering init_hw...\n");
+
 	/* Reset the chip. */
 	outl(0x80000000, ioaddr + DMACtrl);
 
-	if (yellowfin_debug > 1)
+	if (yellowfin_debug > 2)
 		printk("%s%d: yellowfin_init_hw() irq %d.\n",
 			   ifp->if_name, ifp->if_unit, yp->irq);
 
@@ -836,11 +870,6 @@ static int yellowfin_init_hw(struct yellowfin_private *yp)
 	outl(0x80008000, ioaddr + RxCtrl);		/* Start Rx and Tx channels. */
 	outl(0x80008000, ioaddr + TxCtrl);
 
-	if (yellowfin_debug > 2) {
-		printk("%s%d: Done yellowfin_init_hw().\n",
-			   ifp->if_name,ifp->if_unit);
-	}
-
 #ifdef TSILL_TODO
 	/* Set the timer to check for link beat. */
 	init_timer(&yp->timer);
@@ -850,13 +879,18 @@ static int yellowfin_init_hw(struct yellowfin_private *yp)
 	add_timer(&yp->timer);
 #endif
 
+	if (yellowfin_debug > 1) {
+		printk("%s%d: Done yellowfin_init_hw().\n",
+			   ifp->if_name,ifp->if_unit);
+	}
+
 	return 0;
 }
 
 static void yellowfin_init(void *arg)
 {
 	struct yellowfin_private *yp = arg;
-	if (yellowfin_debug > 2 )
+	if (yellowfin_debug > 1 )
 		printk("yellowfin_init(): entering... (YP: 0x%08x, daemon ID: 0x%08x)\n",
 				yp, yp->daemonTid);
 
@@ -864,24 +898,23 @@ static void yellowfin_init(void *arg)
 		printk("Yellowfin: daemon already up, doing nothing\n");
 		return;
 	}
+	/* initialize the hardware (we are holding the network semaphore at this point) */
+	(void)yellowfin_init_hw(yp);
 	/* launch network daemon */
-	yp->daemonTid = rtems_bsdnet_newproc(YELLOWFIN_TASK_NAME,4096,yellowfin_daemon,arg);
 
-#if 0	/* in ss-20011025 any task created by 'bsdnet_newproc' is wrapped by
-	   code which acquires the network semaphore. Hence I moved this
-	   to the daemon...
+	/* NOTE:
+	 * in ss-20011025 (and later) any task created by 'bsdnet_newproc' is
+ 	 * wrapped by code which acquires the network semaphore...
 	 */
-	/* wait for the daemon to start up */
-	rtems_semaphore_obtain(yp->daemonSync, RTEMS_WAIT, RTEMS_NO_TIMEOUT);
+	yp->daemonTid = rtems_bsdnet_newproc(YELLOWFIN_TASK_NAME,4096,yellowfin_daemon,arg);
 
 	/* I guess that we own the bsdnet_semaphore at this point.
 	 * Hence, we must set IFF_RUNNING in our context rather than
 	 * having the daemon do it [although it is probably safe, too].
 	 */
 	yp->arpcom.ac_if.if_flags |= IFF_RUNNING;
-#endif
 
-	if (yellowfin_debug > 2 )
+	if (yellowfin_debug > 1 )
 		printk("yellowfin_init(): leaving.\n");
 }
 
@@ -1221,16 +1254,10 @@ struct ifnet	*ifp=&yp->arpcom.ac_if;
 	if (yellowfin_debug > 1)
 		printk("Yellowfin daemon: starting...\n");
 
-	/* initialize the hardware and let the task
-	 * that spawned us continue
-	 */
-	(void)yellowfin_init_hw(yp);
 #if 0	/* see comment in yellowfin_init(); in newer versions of
 	   rtems, we old the network semaphore at this point
 	 */
 	rtems_semaphore_release(yp->daemonSync);
-#else
-	yp->arpcom.ac_if.if_flags |= IFF_RUNNING;
 #endif
 
 	/* NOTE: our creator possibly holds the bsdnet_semaphore.
@@ -1871,11 +1898,13 @@ static int yellowfin_ioctl(struct ifnet *ifp, int cmd, caddr_t arg)
 #endif
 #endif
 
-	printk("Yellowfin: entering ioctl...\n");
+	if (yellowfin_debug>1)
+		printk("Yellowfin: entering ioctl...\n");
 
 	switch(cmd) {
 	default:
-		printk("Yellowfin: etherioctl...\n");
+		if (yellowfin_debug>1)
+			printk("Yellowfin: etherioctl...\n");
 		return ether_ioctl(ifp, cmd, arg);
 
 #ifdef USE_MII_IOCTLS
@@ -1930,7 +1959,8 @@ static int yellowfin_ioctl(struct ifnet *ifp, int cmd, caddr_t arg)
 #endif
 
 	}
-	printk("Yellowfin: leaving ioctl...\n");
+	if (yellowfin_debug>1)
+		printk("Yellowfin: leaving ioctl...\n");
 	return 0;
 }
 
