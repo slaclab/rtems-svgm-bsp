@@ -54,6 +54,9 @@
 /* there is no public Workspace_Free() variant :-( */
 #include <rtems/score/wkspace.h>
 
+void _BSP_pciCacheInit();
+unsigned long _BSP_clear_hostbridge_errors();
+
 #define USE_BOOTP_STUFF
 
 #ifdef  USE_BOOTP_STUFF
@@ -614,7 +617,8 @@ void bsp_start( void )
    * config_addr / config_data addresses here
    */
   InitializePCI();
-
+  /* now build the pci device cache which supports BSP_pciFindDevice() */
+  _BSP_pciCacheInit();
   /* read board info registers */
   reg = *SYN_VGM_REG_INFO_MEMORY;
   BSP_mem_size 				= 
@@ -636,6 +640,19 @@ void bsp_start( void )
   BSP_time_base_divisor		= 4000; /* 750 and 7400 clock the TB / DECR at 1/4 of the CPU speed */
   BSPBaseBaud				= 9600*156; /* TODO, found by experiment */
   
+  /* and finally clear the hostbridge errors and enable MCP exception
+   * generation. Note that config space access to non-existent devices
+   * results in a master abort
+   * (call this routine only after the CPU table has been initialized;
+   * it uses rtems_bsp_delay())
+   *
+   * Experience tells us that we have to repeat this step a couple
+   * of times...
+   */
+  _BSP_clear_hostbridge_errors(0/*enableMCP*/,1/*quiet*/);
+  _BSP_clear_hostbridge_errors(0/*enableMCP*/,1/*quiet*/);
+  _BSP_clear_hostbridge_errors(1/*enableMCP*/,0/*quiet*/);
+
 
   /* Allocate and set up the page table mappings.
    * This is done in an extra file giving applications
