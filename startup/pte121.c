@@ -1,18 +1,3 @@
-#undef  DEBUG_MAIN
-#define DEBUG
-
-#ifndef DEBUG_MAIN
-#include <rtems.h>
-#include <libcpu/cpu.h>
-#include <bsp.h>
-#include <bsp/vectors.h>
-#include <libcpu/raw_exception.h>
-#endif
-
-#include <assert.h>
-
-#include "pte121.h"
-
 /* $Id$ */
 
 /* Trivial page table setup for RTEMS
@@ -21,10 +6,40 @@
  * Author: Till Straumann <strauman@slac.stanford.edu>, 4/2002
  */
 
+/* Chose debugging options */
+#undef  DEBUG_MAIN	/* create a standalone (host) program for basic testing */
+#define DEBUG		/* target debugging and consistency checking */
+#define DEBUG_EXC	/* add exception handler which reenables BAT0 and recovers from a page fault */
 
-/* base 2 logs of some sizes */
+#ifdef	DEBUG_MAIN
+#undef	DEBUG		/* must not use these together with DEBUG_MAIN */
+#undef	DEBUG_EXC
+#endif
+
+/***************************** INCLUDE HEADERS ****************************/
 
 #ifndef DEBUG_MAIN
+#include <rtems.h>
+#include <rtems/bspIo.h>
+#include <libcpu/cpu.h>
+#include <bsp.h>
+#ifdef	DEBUG_EXC
+#include <bsp/vectors.h>
+#include <libcpu/raw_exception.h>
+#endif
+#endif
+
+#include <stdio.h>
+#include <assert.h>
+
+#include "pte121.h"
+
+/************************** CONSTANT DEFINITIONS **************************/
+
+/* Base 2 logs of some sizes */
+
+#ifndef DEBUG_MAIN
+
 #define	LD_PHYS_SIZE	32		/* physical address space */
 #define LD_PG_SIZE		12		/* page size */
 #define LD_PTEG_SIZE	6		/* PTEG size */
@@ -32,8 +47,10 @@
 #define LD_SEG_SIZE		28		/* segment size */
 #define LD_MIN_PT_SIZE	16		/* minimal size of a page table */
 #define LD_HASH_SIZE	19		/* lengh of a hash */
-#else
-/* reduced 'fantasy' sizes for testing */
+
+#else /* DEBUG_MAIN */
+
+/* Reduced 'fantasy' sizes for testing */
 #define	LD_PHYS_SIZE	32		/* physical address space */
 #define LD_PG_SIZE		6		/* page size */
 #define LD_PTEG_SIZE	5		/* PTEG size */
@@ -41,16 +58,20 @@
 #define LD_SEG_SIZE		28		/* segment size */
 #define LD_MIN_PT_SIZE	7		/* minimal size of a page table */
 #define LD_HASH_SIZE	19		/* lengh of a hash */
-#endif
 
+#endif /* DEBUG_MAIN */
+
+/* Derived sizes */
+
+/* Size of a page index */
 #define LD_PI_SIZE		((LD_SEG_SIZE) - (LD_PG_SIZE)) 
+
+/* Number of PTEs in a PTEG */
 #define PTE_PER_PTEG	(1<<((LD_PTEG_SIZE)-(LD_PTE_SIZE)))
 
-#define KEY_SUP			(1<<30)
-#define KEY_USR			(1<<29)
-
-#define VSID121(ea) (((ea)>>LD_SEG_SIZE) & ((1<<(LD_PHYS_SIZE-LD_SEG_SIZE))-1))
-#define PI121(ea)	(((ea)>>LD_PG_SIZE) & ((1<<LD_PI_SIZE)-1))
+/* Segment register bits */
+#define KEY_SUP			(1<<30)	/* supervisor mode key */
+#define KEY_USR			(1<<29)	/* user mode key */
 
 /* The range of effective addresses to scan with 'tlbie'
  * instructions in order to flush all TLBs.
@@ -60,12 +81,75 @@
  * where rx scans 0x00000, 0x01000, 0x02000, ... 0x3f000
  * is sufficient to do the job
  */
-#ifdef TSILL
-#define FLUSH_EA_RANGE	(64<<LD_PG_SIZE)
+#define NUM_TLB_PER_WAY 64 /* 750 and 7400 have 128 two way TLBs */
+#define FLUSH_EA_RANGE	(NUM_TLB_PER_WAY<<LD_PG_SIZE)
+
+/*************************** MACRO DEFINITIONS ****************************/
+
+/* Macros to split a (32bit) 'effective' address into
+ * VSID (virtual segment id) and PI (page index)
+ * using a 1:1 mapping of 'effective' to 'virtual'
+ * addresses.
+ *
+ * For 32bit addresses this looks like follows
+ * (each 'x' or '0' stands for a 'nibble' [4bits]):
+ *
+ *         32bit effective address (EA)
+ *
+ *              x x x x x x x x
+ *               |       |
+ *    0 0 0 0 0 x|x x x x|x x x
+ *       VSID    |  PI   |  PO (page offset)
+ *               |       |
+ */
+/* 1:1 VSID of an EA  */
+#define VSID121(ea) (((ea)>>LD_SEG_SIZE) & ((1<<(LD_PHYS_SIZE-LD_SEG_SIZE))-1))
+/* page index of an EA */
+#define PI121(ea)	(((ea)>>LD_PG_SIZE) & ((1<<LD_PI_SIZE)-1))
+
+
+/* Primary and secondary PTE hash functions */
+
+/* Compute the primary hash from a VSID and a PI */
+#define PTE_HASH1(vsid, pi) (((vsid)^(pi))&((1<<LD_HASH_SIZE)-1))
+
+/* Compute the secondary hash from a primary hash */
+#define PTE_HASH2(hash1) ((~(hash1))&((1<<LD_HASH_SIZE)-1))
+
+/* Extract the abbreviated page index (which is the
+ * part of the PI which does not go into the hash
+ * under all circumstances [10 bits to -> 6bit API])
+ */
+#define API(pi)	((pi)>>((LD_MIN_PT_SIZE)-(LD_PTEG_SIZE)))
+
+
+/* Horrible Macros */
+#ifdef __rtems
+/* must not use printf until multitasking is up */
+typedef void (*PrintF)(char *,...);
+static PrintF whatPrintf(void)
+{
+		return _Thread_Executing ?
+				(PrintF)printf :
+				printk;
+}
+
+#define PRINTF(args...) ((void)(whatPrintf())(args))
 #else
-#warning "FLUSH_EA_RANGE"
-#define FLUSH_EA_RANGE	(0x10000000)
+#define PRINTF(args...) printf(args)
 #endif
+
+#ifdef DEBUG
+unsigned long
+triv121PgTblConsistency(Triv121PgTbl pt, int pass, int expect);
+
+static int consistencyPass=0;
+#define CONSCHECK(expect) triv121PgTblConsistency(&pgTbl,consistencyPass++,(expect))
+#else
+#define CONSCHECK(expect) do {} while (0)
+#endif
+
+/**************************** TYPE DEFINITIONS ****************************/
 
 /* A PTE entry */
 typedef struct PTERec_ {
@@ -73,36 +157,47 @@ typedef struct PTERec_ {
 		unsigned long rpn:20, pad: 3, r:1, c:1, wimg:4, marked:1, pp:2;
 } PTERec, *PTE;
 
+/* internal description of a trivial page table */
 typedef struct Triv121PgTblRec_ {
 		PTE				base;
 		unsigned long	size;
 		int				active;
 } Triv121PgTblRec;
 
+
+/************************** FORWARD DECLARATIONS *************************/
+
+#ifdef DEBUG_EXC
+static void
+myhdl(BSP_Exception_frame* excPtr);
+#endif
+
+#if defined(DEBUG_MAIN) || defined(DEBUG)
+static void
+dumpPte(PTE pte);
+#endif
+
+#ifdef DEBUG
+static void
+dumpPteg(unsigned long vsid, unsigned long pi, unsigned long hash);
+unsigned long
+triv121IsRangeMapped(unsigned long start, unsigned long end);
+#endif
+
+/**************************** STATIC VARIABLES ****************************/
+
 /* dont malloc - we might have to use this before
  * we have malloc or even RTEMS workspace available
  */
 static Triv121PgTblRec pgTbl={0};
 
-#ifdef DEBUG
-unsigned long
-triv121PgTblConsistency(Triv121PgTbl pt, int pass);
-#define CONS(pass,expect) do { \
-		unsigned long r=triv121PgTblConsistency(&pgTbl,(pass)); \
-		if ( expect>0 && r!=(expect)) { \
-			printk("Wrong # of occupied slots detected during pass %i; should be %i (0x%x) is %i (0x%x)\n",\
-				pass, (expect), r);	\
-		}	\
-		} while (0)
-#else
-#define CONS(pass,expect)
+#ifdef DEBUG_EXC
+static void *ohdl;			/* keep a pointer to the original handler */
 #endif
 
-#define PTE_HASH1(vsid, pi) (((vsid)^(pi))&((1<<LD_HASH_SIZE)-1))
-#define PTE_HASH2(hash1) ((~(hash1))&((1<<LD_HASH_SIZE)-1))
+/*********************** INLINES & PRIVATE ROUTINES ***********************/
 
-#define API(pi)	((pi)>>((LD_MIN_PT_SIZE)-(LD_PTEG_SIZE)))
-
+/* compute the page table entry group (PTEG) of a hash */
 static inline PTE
 ptegOf(Triv121PgTbl pt, unsigned long hash)
 {
@@ -110,8 +205,16 @@ ptegOf(Triv121PgTbl pt, unsigned long hash)
 	return (PTE)(((unsigned long)pt->base) | ((hash<<LD_PTEG_SIZE) & (pt->size-1)));
 }
 
+/* see if a vsid/pi combination is already mapped
+ *
+ * RETURNS: PTE of mapping / NULL if none exists
+ *
+ * NOTE: a vsid<0 is legal and will tell this
+ *       routine that 'pi' is actually an EA to
+ *       be split into vsid and pi...
+ */
 static PTE
-alreadyMapped(Triv121PgTbl pt, unsigned long vsid, unsigned long pi)
+alreadyMapped(Triv121PgTbl pt, long vsid, unsigned long pi)
 {
 int				i;
 unsigned long	hash,api;
@@ -119,6 +222,11 @@ PTE				pte;
 
 	if (!pt->size)
 		return 0;
+
+	if (vsid<0) {
+		vsid=VSID121(pi);
+		pi=PI121(pi);
+	}
 
 	hash = PTE_HASH1(vsid,pi);
 	api=API(pi);
@@ -133,7 +241,15 @@ PTE				pte;
 	return 0;
 }
 
-/* find the first available slot for  vsid/pi */
+/* find the first available slot for  vsid/pi
+ *
+ * NOTE: it is NOT legal to pass a vsid<0 / EA combination.
+ *
+ * RETURNS free slot with the 'marked' field set. The 'h'
+ *         field is set to 0 or one, depending on whether
+ *         the slot was allocated by using the primary or
+ *         the secondary hash, respectively.
+ */
 static PTE
 slotFor(Triv121PgTbl pt, unsigned long vsid, unsigned long pi)
 {
@@ -141,27 +257,31 @@ int				i;
 unsigned long	hash,api;
 PTE				pte;
 
+	/* primary hash */
 	hash = PTE_HASH1(vsid,pi);
 	api=API(pi);
+	/* linear search thru all buckets for this hash */
 	for (i=0, pte=ptegOf(pt,hash); i<PTE_PER_PTEG; i++,pte++) {
 		if (!pte->v && !pte->marked) {
-			/* mark this pte as potentially used */
-			pte->h=0;
+			/* found a free PTE; mark it as potentially used and return */
+			pte->h=0;	/* found by the primary hash fn */
 			pte->marked=1;
 			return pte;
 		}
 	}
+
 #ifdef DEBUG
-	printk("## First hash bucket full - hash 0x%08x, pteg 0x%08x (vsid 0x%08x, pi 0x%08x)\n",
-			hash, ptegOf(pt,hash), vsid, pi);
-	for (i=0, pte=ptegOf(pt,hash); i<PTE_PER_PTEG; i++,pte++) {
-		printk("pte 0x%08x is 0x%08x : 0x%08x\n",
-			pte,*(unsigned long*)pte, *(((unsigned long*)pte)+1));
-	}
+	/* Strange: if the hash table was allocated big enough,
+	 *          this should not happen (when using a 1:1 mapping)
+	 *          Give them some information...
+	 */
+	PRINTF("## First hash bucket full - ");
+	dumpPteg(vsid,pi,hash);
 #endif
+
 	hash = PTE_HASH2(hash);
 #ifdef DEBUG
-	printk("   Secondary pteg is 0x%08x\n",ptegOf(pt,hash));
+	PRINTF("   Secondary pteg is 0x%08x\n", (unsigned)ptegOf(pt,hash));
 #endif
 	for (i=0, pte=ptegOf(pt,hash); i<PTE_PER_PTEG; i++,pte++) {
 		if (!pte->v && !pte->marked) {
@@ -172,12 +292,14 @@ PTE				pte;
 		}
 	}
 #ifdef DEBUG
-	printk("## Second hash bucket full - hash 0x%08x, pteg 0x%08x (vsid 0x%08x, pi 0x%08x)\n",
-			hash, ptegOf(pt,hash), vsid, pi);
+	/* Even more strange - most likely, something is REALLY messed up */
+	PRINTF("## Second hash bucket full - ");
+	dumpPteg(vsid,pi,hash);
 #endif
 	return 0;
 }
 
+/* unmark all entries */
 static void
 unmarkAll(Triv121PgTbl pt)
 {
@@ -189,24 +311,43 @@ PTE				pte;
 
 }
 
+/* calculate the minimal size of a page/hash table
+ * to map a range of 'size' bytes in EA space.
+ *
+ * RETURNS: size in 'number of bits', i.e. the
+ *          integer part of LOGbase2(minsize)
+ *          is returned.
+ * NOTE:	G3/G4 machines need at least 16 bits
+ *          (64k).
+ */
 unsigned long
 triv121PgTblLdMinSize(unsigned long size)
 {
 unsigned long i;
-	/* page align 'size' */
+	/* round 'size' up to the next page boundary */
 	size += (1<<LD_PG_SIZE)-1;
 	size &= ~((1<<LD_PG_SIZE)-1);
-	/* number of PTEs * sizeof(PTERec) */
+	/* divide by number of PTEs  and multiply
+	 * by the size of a PTE.
+	 */
 	size >>= LD_PG_SIZE - LD_PTE_SIZE;
 	/* find the next power of 2 >= size */
 	for (i=0; i<LD_PHYS_SIZE; i++) {
 		if ((1<<i) >= size)
 			break;
 	}
+	/* pop up to the allowed minimum, if necessary */
+	if (i<LD_MIN_PT_SIZE)
+			i=LD_MIN_PT_SIZE;
 	return i;
 }
 
-/* initialize a trivial page table at 'base', allocate a size of 2^ldSize bytes */
+/* initialize a trivial page table of 2^ldSize bytes
+ * at 'base' in memory.
+ *
+ * RETURNS:	OPAQUE HANDLE (not the hash table address)
+ *          or NULL on failure.
+ */
 Triv121PgTbl
 triv121PgTblInit(unsigned long base, unsigned ldSize)
 {
@@ -223,7 +364,7 @@ triv121PgTblInit(unsigned long base, unsigned ldSize)
 	/* clear all page table entries */
 	memset(pgTbl.base, 0, pgTbl.size);
 
-	CONS(0,0);
+	CONSCHECK(0);
 
 	/* map the page table itself 'm' and 'readonly' */
 	if (triv121PgTblMap(&pgTbl,
@@ -234,41 +375,26 @@ triv121PgTblInit(unsigned long base, unsigned ldSize)
 						TRIV121_PP_RO_PAGE) >= 0)
 		return 0;
 
-	CONS(1, (pgTbl.size>>LD_PG_SIZE));
+	CONSCHECK((pgTbl.size>>LD_PG_SIZE));
 
 	return &pgTbl;
 }
 
+/* return the handle of the (one and only) page table
+ * or NULL if none has been initialized yet.
+ */
 Triv121PgTbl
 triv121PgTblGet(void)
 {
 	return pgTbl.size ? &pgTbl : 0;
 }
 
-static void *ohdl;
-
-static void myhdl(BSP_Exception_frame* excPtr)
-{
-if (0 && 3==excPtr->_EXC_number) {
-	unsigned long dsisr;
-
-	/* make this exception recoverable */
-	excPtr->_EXC_number = ASM_DEC_VECTOR;
-	/* reactivate DBAT0 */
-	__asm__ __volatile__(
-			"mfspr %0, %1\n"
-			"ori	%0,%0,3\n"
-			"mtspr %1, %0\n"
-			"sync\n"
-			"mfspr %0, %2\n":"=r"(dsisr):"i"(DBAT0U),"i"(DSISR));
-	printk("DSISR 0x%08x\n",dsisr);
-}
-((void(*)())ohdl)(excPtr);
-}
-
 /* NOTE: this routine returns -1 on success;
  *       on failure, the page table index for
  *       which no PTE could be allocated is returned
+ *
+ * (Consult header about argument/return value
+ * description)
  */
 long
 triv121PgTblMap(
@@ -284,7 +410,7 @@ int				i,pass;
 unsigned long	pi;
 PTE				pte;
 
-	/* already active */
+	/* already activated - no change allowed */
 	if (pt->active)
 			return -1;
 
@@ -294,18 +420,34 @@ PTE				pte;
 	}
 
 #ifdef DEBUG
-	printk("Mapping %i (0x%x) pages at 0x%08x for VSID 0x%08x\n",
-		numPages, numPages, start, vsid);
+	PRINTF("Mapping %i (0x%x) pages at 0x%08x for VSID 0x%08x\n",
+		(unsigned)numPages, (unsigned)numPages,
+		(unsigned)start, (unsigned)vsid);
 #endif
 
+	/* map in two passes. During the first pass, we try
+	 * to claim entries as needed. The 'slotFor()' routine
+	 * will 'mark' the claimed entries without 'valid'ating
+	 * them.
+	 * If the mapping fails, all claimed entries are unmarked
+	 * and we return the PI for which allocation failed.
+	 *
+	 * Once we know that the allocation would succeed, we
+	 * do a second pass; during the second pass, the PTE
+	 * is actually written.
+	 *
+	 */
 	for (pass=0; pass<2; pass++) {
 		/* check if we would succeed during the first pass */
 		for (i=0, pi=PI121(start); i<numPages; i++,pi++) {
+			/* leave alone existing mappings for this EA */
 			if (!alreadyMapped(pt, vsid, pi)) {
 				if (!(pte=slotFor(pt, vsid, pi))) {
+					/* no free slot found for page index 'pi' */
 					unmarkAll(pt);
-					return pi; /* no free slot for page index 'pi' */
+					return pi;
 				} else {
+					/* have a free slot; marked by slotFor() */
 					if (pass) {
 						/* second pass; do the real work */
 						pte->vsid=vsid;
@@ -319,7 +461,8 @@ PTE				pte;
 						pte->v=1;
 						pte->marked=0;
 #ifdef DEBUG
-assert(alreadyMapped(pt, vsid, pi) == pte);
+						/* add paranoia */
+						assert(alreadyMapped(pt, vsid, pi) == pte);
 #endif
 					}
 				}
@@ -329,12 +472,12 @@ assert(alreadyMapped(pt, vsid, pi) == pte);
 	}
 #ifdef DEBUG
 	{
-	unsigned long triv121IsRangeMapped();
 	unsigned long failedat;
-	CONS(100,-1);
+	CONSCHECK(-1);
+	/* double check that the requested range is mapped */
 	failedat=triv121IsRangeMapped(start, start + (1<<LD_PG_SIZE)*numPages);
 	if (0x0C0C != failedat) {
-		printk("triv121 mapping failed at 0x%08x\n",failedat);
+		PRINTF("triv121 mapping failed at 0x%08x\n",(unsigned)failedat);
 		return PI121(failedat);
 	}
 	}
@@ -363,14 +506,19 @@ unsigned long msr=0; /* keep compiler happy */
 unsigned long sdr1=triv121PgTblSDR1(pt);
 #endif
 	pt->active=1;
+
 #ifndef DEBUG_MAIN
+	/* Probably this works on a 604 also, but I couldn't test.
+	 * Verify that the TLB invalidation works for a new CPU
+	 * variant before adding it to this list
+	 */
 	assert(current_ppc_cpu == PPC_750 || current_ppc_cpu == PPC_7400);
 
-#warning TSILL
-#if 0
+#ifdef DEBUG_EXC
+	/* install our exception handler */
 	ohdl=globalExceptHdl;
 	globalExceptHdl=myhdl;
-__asm__ __volatile__ ("sync");
+	__asm__ __volatile__ ("sync");
 #endif
 
 	/* get MSR and switch interrupts off - just in case */
@@ -380,11 +528,19 @@ __asm__ __volatile__ ("sync");
 		"mtmsr %0\n"
 		:"=r&"(msr):"0"(msr),"r"(MSR_EE)
 	);
-	/* switch MMU off if it is not off already */
+	/* switch MMU off if it is not off already; the book
+	 * says that SDR1 must not be changed with either
+	 * MSR_IR or MSR_DR set. I would guess that it could
+	 * be safe as long as the IBAT & DBAT mappings override
+	 * the page table...
+	 */
 	if ( msr & (MSR_IR|MSR_DR) )
 		MMUoff();
 
-	/* - load up the segment registers with a
+	/* This section of assembly code takes care of the
+	 * following:
+	 *
+	 * - load up the segment registers with a
 	 *   1:1 effective <-> virtual mapping;
 	 *   give user & supervisor keys
 	 *
@@ -410,15 +566,9 @@ __asm__ __volatile__ ("sync");
 		"	bgt		2b\n"
 		"	tlbsync\n"
 		"	sync\n"
-		"	li		%0, 0\n"
-		"	mfspr	%1, %6\n"
-		"	andc	%1, %1, %0\n"
-		"	mtspr	%6,	%1\n"
-		"	sync\n"
 		::"b"(16), "b"(KEY_USR | KEY_SUP),
 		  "i"(FLUSH_EA_RANGE), "i"(1<<LD_PG_SIZE),
-		  "i"(SDR1), "r"(sdr1),
-		  "i"(DBAT0U)
+		  "i"(SDR1), "r"(sdr1)
 		: "ctr","cc");
 
 	/* switch MMU back on if it was on on entry */
@@ -434,104 +584,87 @@ __asm__ __volatile__ ("sync");
 #endif
 }
 
-#ifndef DEBUG_MAIN
+/**************************  DEBUGGING ROUTINES  *************************/
 
-#endif
+/* Exception handler to catch page faults */
+#ifdef DEBUG_EXC
 
-#if defined(DEBUG_MAIN) || defined(DEBUG)
-#include <stdlib.h>
-#include <stdio.h>
+#define BAT_VALID_BOTH	3	/* allow user + super access */
 
 static void
-dumpPte(PTE pte)
+myhdl(BSP_Exception_frame* excPtr)
 {
-int (*p)();
-int printk();
-	if (_Thread_Executing) {
-		p=printf;
-	} else {
-		p=printk;
-	}
-	if (0==((unsigned long)pte & ((1<<LD_PTEG_SIZE)-1)))
-		p("PTEG--");
-	else
-		p("......");
-	if (pte->v) {
-		p("VSID: 0x%08x H:%1i API: 0x%02x\n",
-					pte->vsid, pte->h, pte->api);
-		p("      ");
-		p("RPN:  0x%08x WIMG: 0x%1x, (m %1i), pp: 0x%1x\n",
-					pte->rpn, pte->wimg, pte->marked, pte->pp);
-	} else {
-		p("xxxxxx\n");
-		p("      ");
-		p("xxxxxx\n");
-	}
+if (3==excPtr->_EXC_number) {
+	unsigned long dsisr;
+
+	/* reactivate DBAT0 and read DSISR */
+	__asm__ __volatile__(
+			"mfspr %0, %1\n"
+			"ori	%0,%0,3\n"
+			"mtspr %1, %0\n"
+			"sync\n"
+			"mfspr %0, %2\n"
+			:"=r"(dsisr)
+			:"i"(DBAT0U),"i"(DSISR),"i"(BAT_VALID_BOTH)
+	);
+
+	printk("Data Access Exception (DSI) # 3\n");
+	printk("Reactivated DBAT0 mapping\n");
+
+
+	printk("DSISR 0x%08x\n",dsisr);
+
+	printk("revectoring to prevent default handler panic().\n");
+	printk("NOTE: exception number %i below is BOGUS\n",
+			ASM_DEC_VECTOR);
+	/* make this exception 'recoverable' for
+	 * the default handler by faking a decrementer
+	 * exception.
+	 * Note that the default handler's message will be
+	 * wrong about the exception number.
+	 */
+	excPtr->_EXC_number = ASM_DEC_VECTOR;
 }
+/* now call the original handler */
+((void(*)())ohdl)(excPtr);
+}
+#endif
+
 
 #ifdef DEBUG
-PTE
-triv121DumpPte(unsigned long ea)
-{
-PTE pte;
 
-	pte=alreadyMapped(
-					&pgTbl,
-					VSID121(ea),
-					PI121(ea)
-					);
-	if (pte)
-		dumpPte(pte);
-	return pte;
-}
-
+/* test the consistency of the page table
+ *
+ * 'pass' is merely a number which will be printed
+ * by this routine, so the caller may give some
+ * context information.
+ *
+ * 'expected' is the number of valid (plus 'marked')
+ * entries the caller believes the page table should
+ * have. This routine complains if its count differs.
+ *
+ * It basically verifies that the topmost 20bits
+ * of all VSIDs as well as the unused bits are all
+ * zero. Then it counts all valid and all 'marked'
+ * entries, adding them up and comparing them to the
+ * 'expected' number of occupied slots.
+ *
+ * RETURNS: total number of valid plus 'marked' slots.
+ */
 unsigned long
-triv121IsRangeMapped(unsigned long start, unsigned long end)
-{
-	start&=~((1<<LD_PG_SIZE)-1);
-	while (start < end) {
-		if (!alreadyMapped(&pgTbl,VSID121(start),PI121(start)))
-			return start;
-		start+=1<<LD_PG_SIZE;
-	}
-	return 0x0C0C; /* OKOK - not on a page boundary */
-}
-#endif
-
-
-#ifndef DEBUG
-static
-#endif
-int
-triv121PgTblDump(Triv121PgTbl pt, unsigned from, unsigned to)
-{
-int i;
-PTE	pte;
-	printf("Dumping PT [size 0x%08lx == %li] at 0x%08lx\n", pt->size, pt->size, (unsigned long)pt->base);
-	if (from> pt->size>>LD_PTE_SIZE)
-		from=0;
-	if (to  > pt->size>>LD_PTE_SIZE)
-		to=(pt->size>>LD_PTE_SIZE)-1;
-	for (i=from,pte=pt->base+from; i<=(long)to; i++, pte++) {
-		dumpPte(pte);
-	}
-	return 0;
-}
-
-unsigned long
-triv121PgTblConsistency(Triv121PgTbl pt, int pass)
+triv121PgTblConsistency(Triv121PgTbl pt, int pass, int expected)
 {
 PTE pte;
 int i;
-unsigned long v,m;
+unsigned v,m;
 int warn=0;
-static int maxw=20;
+static int maxw=20;	/* mute after detecting this many errors */
 
-	printk("Checking page table at %p (size %i==0x%x)\n",
-			pt->base, pt->size, pt->size);
+	PRINTF("Checking page table at 0x%08x (size %i==0x%x)\n",
+			(unsigned)pt->base, (unsigned)pt->size, (unsigned)pt->size);
 
 	if (!pt->base || !pt->size) {
-		printk("Uninitialized Page Table!\n");
+		PRINTF("Uninitialized Page Table!\n");
 		return 0;
 	}
 
@@ -549,19 +682,132 @@ static int maxw=20;
 			if (pte->marked) m++;
 		}
 		if (err && maxw) {
-			printk("Pass %i -- strange PTE at 0x%08x found for page index %i == 0x%08x:\n",
-				pass,pte,i,i);
-			printk("Reason: %s\n",buf);
+			PRINTF("Pass %i -- strange PTE at 0x%08x found for page index %i == 0x%08x:\n",
+				pass,(unsigned)pte,i,i);
+			PRINTF("Reason: %s\n",buf);
 			dumpPte(pte);
 			warn++;
 			maxw--;
 		}
 	}
 	if (warn) {
-		printk("%i errors found; currently %i entries marked, %i are valid\n",
+		PRINTF("%i errors found; currently %i entries marked, %i are valid\n",
 			warn, m, v);
 	}
-	return m+v;
+	v+=m;
+	if (maxw && expected>=0 && expected != v) {
+		/* number of occupied slots not what they expected */
+		PRINTF("Wrong # of occupied slots detected during pass");
+	    PRINTF("%i; should be %i (0x%x) is %i (0x%x)\n",
+				pass, expected, (unsigned)expected, v, (unsigned)v);
+		maxw--;
+	}
+	return v;
+}
+
+/* Find the PTE for a EA and print its contents
+ * RETURNS: pte for EA or NULL if no entry was found.
+ */
+PTE
+triv121DumpPte(unsigned long ea)
+{
+PTE pte;
+
+	pte=alreadyMapped(&pgTbl,TRIV121_121_VSID,ea);
+
+	if (pte)
+		dumpPte(pte);
+	return pte;
+}
+
+/* Dump an entire PTEG */
+
+static void
+dumpPteg(unsigned long vsid, unsigned long pi, unsigned long hash)
+{
+PTE pte=ptegOf(&pgTbl,hash);
+int i;
+	PRINTF("hash 0x%08x, pteg 0x%08x (vsid 0x%08x, pi 0x%08x)\n",
+			(unsigned)hash, (unsigned)pte,
+			(unsigned)vsid, (unsigned)pi);
+	for (i=0; i<PTE_PER_PTEG; i++,pte++) {
+		PRINTF("pte 0x%08x is 0x%08x : 0x%08x\n",
+			(unsigned)pte,
+			(unsigned)*(unsigned long*)pte,
+			(unsigned)*(((unsigned long*)pte)+1));
+	}
+}
+ 
+/* Verify that a range of EAs is mapped the page table
+ *
+ * RETURNS: address of the first page for which no
+ *          PTE was found (i.e. page index * page size)
+ *          
+ *          ON SUCCESS, the special value 0x0C0C ("OKOK")
+ *          [which is not page aligned and hence is not
+ *          a valid page address].
+ */
+unsigned long
+triv121IsRangeMapped(unsigned long start, unsigned long end)
+{
+	start&=~((1<<LD_PG_SIZE)-1);
+	while (start < end) {
+		if (!alreadyMapped(&pgTbl,TRIV121_121_VSID,start))
+			return start;
+		start+=1<<LD_PG_SIZE;
+	}
+	return 0x0C0C; /* OKOK - not on a page boundary */
+}
+
+#endif
+
+
+#if defined(DEBUG_MAIN) || defined(DEBUG)
+#include <stdlib.h>
+
+/* print a PTE */
+static void
+dumpPte(PTE pte)
+{
+	if (0==((unsigned long)pte & ((1<<LD_PTEG_SIZE)-1)))
+		PRINTF("PTEG--");
+	else
+		PRINTF("......");
+	if (pte->v) {
+		PRINTF("VSID: 0x%08x H:%1i API: 0x%02x\n",
+					pte->vsid, pte->h, pte->api);
+		PRINTF("      ");
+		PRINTF("RPN:  0x%08x WIMG: 0x%1x, (m %1i), pp: 0x%1x\n",
+					pte->rpn, pte->wimg, pte->marked, pte->pp);
+	} else {
+		PRINTF("xxxxxx\n");
+		PRINTF("      ");
+		PRINTF("xxxxxx\n");
+	}
+}
+
+
+/* dump page table entries from index 'from' to 'to'
+ * The special values (unsigned)-1 are allowed which
+ * cause the routine to dump the entire table.
+ *
+ * RETURNS 0
+ */
+int
+triv121PgTblDump(Triv121PgTbl pt, unsigned from, unsigned to)
+{
+int i;
+PTE	pte;
+	PRINTF("Dumping PT [size 0x%08x == %i] at 0x%08x\n",
+			(unsigned)pt->size, (unsigned)pt->size, (unsigned)pt->base);
+	if (from> pt->size>>LD_PTE_SIZE)
+		from=0;
+	if (to  > pt->size>>LD_PTE_SIZE)
+		to=(pt->size>>LD_PTE_SIZE);
+	for (i=from,pte=pt->base+from; i<(long)to; i++, pte++) {
+		dumpPte(pte);
+	}
+	return 0;
 }
 
 
@@ -589,14 +835,14 @@ Triv121PgTbl	pt;
 	triv121PgTblDump(pt,(unsigned)-1, (unsigned)-1);
 	do {
 		do {
-		printf("Start Address:"); fflush(stdout);
+		PRINTF("Start Address:"); fflush(stdout);
 		} while (1!=scanf("%i",&start));
 		do {
-		printf("# pages:"); fflush(stdout);
+		PRINTF("# pages:"); fflush(stdout);
 		} while (1!=scanf("%i",&numPages));
 	} while (TRIV121_MAP_SUCCESS==triv121PgTblMap(pt,TRIV121_121_VSID,start,numPages,
 							TRIV121_ATTR_IO_PAGE,2) &&
-			0==triv121PgTblDump(pt));
+			0==triv121PgTblDump(pt,(unsigned)-1,(unsigned)-1));
 }
 #endif
 #endif
