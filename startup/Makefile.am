@@ -2,7 +2,7 @@
 ## $Id$
 ##
 
-VPATH = @srcdir@:@srcdir@/../console:@srcdir@/../../../shared:@srcdir@/../../shared/startup
+VPATH = @srcdir@:@srcdir@/../console:@srcdir@/../../shared/startup:@srcdir@/../../../shared
 
 INCLUDES = -I @srcdir@/../synergy
 
