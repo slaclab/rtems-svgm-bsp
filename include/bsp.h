@@ -9,8 +9,8 @@
  *
  * $Id$
  */
-#ifndef LIBBSP_POWERPC_MOTOROLA_SHARED_BSP_H
-#define LIBBSP_POWERPC_MOTOROLA_SHARED_BSP_H
+#ifndef LIBBSP_POWERPC_SVGM_BSP_H
+#define LIBBSP_POWERPC_SVGM_BSP_H
 
 #include <rtems.h>
 #include <console.h>
