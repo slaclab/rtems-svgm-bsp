@@ -22,6 +22,9 @@ unsigned long
 _BSP_clear_hostbridge_errors();
 
 void
+rtemsReboot(void);
+
+void
 BSP_exceptionHandler(BSP_Exception_frame* excPtr)
 {
 rtems_unsigned32		note;
@@ -164,9 +167,8 @@ char					*fmt="Uhuuuh, Exception %d in unknown task???\n";
 			}
 			rtems_task_suspend(id);
 		} else {
-			printk("PANIC...\n");
-			while (1)
-				;
+			printk("PANIC, rebooting...\n");
+			rtemsReboot();
 		}
 	}
 }
