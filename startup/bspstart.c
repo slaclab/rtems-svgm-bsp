@@ -671,7 +671,7 @@ void bsp_start( void )
   printk("-----------------------------------------\n");
   printk("Welcome to RTEMS RELEASE %s/svgm on %s/%s/%s\n",
 		  RTEMS_VERSION, chpt, CPU_NAME, get_ppc_cpu_type_name(myCpu));
-  printk("SSRL Release $Name$/$Date$\n");
+  printk("SSRL Release $Name$\n");
   printk("Build Date: %s\n",BSP_build_date);
   printk("-----------------------------------------\n");
 #ifdef SHOW_MORE_INIT_SETTINGS  
