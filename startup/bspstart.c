@@ -43,9 +43,6 @@
 #include <synergyregs.h>
 #include "pte121.h"
 
-#include <stdio.h>
-#warning TSILL
-
 /* for RTEMS_VERSION :-( I dont like the preassembled string */
 #include <rtems/sptables.h>
 
@@ -62,6 +59,7 @@
 
 #include <rtems/rtems_bsdnet.h>
 
+#include <assert.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 
@@ -71,46 +69,37 @@
 static void (*the_apps_bootp)(void)=0;
 static void my_bootp_intercept(void);
 
-char   *__BSP_dummy_bsdnet_bootp_file_name=0;
-struct in_addr __BSP_dummy_bsdnet_bootp_server_address={0};
-struct rtems_bsdnet_config __BSP_dummy_bsdnet_config={0};
+/* NOTE the '__BSP_wrap_xxx' symbols are defined by
+ * the linker script. The idea is to avoid referencing
+ * any networking symbols, so a non-networked application
+ * will not have to be linked against the networking code.
+ *
+ * These names are long and ugly to prevent name clashes
+ * (global namespace :-()
+ */
+extern char   						*__BSP_wrap_rtems_bsdnet_bootp_boot_file_name;
+extern struct in_addr				__BSP_wrap_rtems_bsdnet_bootp_server_address;
+extern struct rtems_bsdnet_config	__BSP_wrap_rtems_bsdnet_config;
+void								__BSP_wrap_rtems_bsdnet_do_bootp();
+int									__BSP_wrap_inet_ntop();
+int									__BSP_wrap_rtems_bsdnet_loopattach();
+
+#define bootp_file					__BSP_wrap_rtems_bsdnet_bootp_boot_file_name
+#define bootp_srvr					__BSP_wrap_rtems_bsdnet_bootp_server_address
+#define net_config					__BSP_wrap_rtems_bsdnet_config
+#define do_bootp					__BSP_wrap_rtems_bsdnet_do_bootp
+#define INET_NTOP					__BSP_wrap_inet_ntop
+#define loopattach					__BSP_wrap_rtems_bsdnet_loopattach
+
 
 /* parameter table for network setup - separate file because
  * copied from the bootloader
  */
 #include "bootpstuff.c"
 
-/* create weak aliases for the networking configuration
- * table just in case the app has no network
- * stuff linked in...
- */
-
-extern struct rtems_bsdnet_config rtems_bsdnet_config
-__attribute__((weak, alias("__BSP_dummy_bsdnet_config") ));
-
-extern char *rtems_bsdnet_bootp_boot_file_name
-__attribute__((weak, alias("__BSP_dummy_bsdnet_bootp_file_name") ));
-
-extern struct in_addr rtems_bsdnet_bootp_server_address
-__attribute__((weak, alias("__BSP_dummy_bsdnet_bootp_server_address") ));
-
-#if 0
-/* the bootp init routine (could be that they
- * configured _without_ bootp but the bootloader
- * told us to use it...
- */
-void   rtems_bsdnet_do_bootp(void)
-__attribute__ (( weak, alias("__BSP_dummy_empty_routine") ));
-
-/* Sigh... */
-int    inet_ntop()
-__attribute__ (( weak, alias("__BSP_dummy_empty_routine") ));
 #endif
 
-
-#endif
-
-#define  SHOW_MORE_INIT_SETTINGS
+#undef   SHOW_MORE_INIT_SETTINGS
 
 /* missing bits... */
 
@@ -297,8 +286,16 @@ void bsp_pretasking_hook(void)
 						if (strstr(beg,p->name)) {
 							/* found this one; since 'name' contains a '=' strchr will succeed */
 							char *s=strchr(beg,'=')+1;
-							*p->pval=malloc(strlen(s)+1);
-							strcpy(*p->pval,s);
+
+							/* p->pval might point into the
+							 * network configuration which is invalid
+							 * if we have no networking
+							 */
+							if (&net_config) {
+								*p->pval=malloc(strlen(s)+1);
+								strcpy(*p->pval,s);
+							}
+							break;
 						}
 					}
 					if (!p->name)
@@ -311,21 +308,48 @@ void bsp_pretasking_hook(void)
 	}
 
 #ifdef USE_BOOTP_STUFF
-	/* now hack into the network configuration... */
-	if (boot_use_bootp && 'N'==toupper(*boot_use_bootp)) {
-		/* no bootp */
-printk("TSILL --- disabling BOOTP\n");
-		rtems_bsdnet_config.bootp=0;
-	} else {
-		the_apps_bootp=rtems_bsdnet_config.bootp;
-		rtems_bsdnet_config.bootp=my_bootp_intercept;
-		/* release the strings that will be set up by
-		 * bootp - bootpc relies on them being NULL
+	/* Check if we are linked with networking support */
+	if (&net_config) {
+		/* seems so - make sure the other symbols are
+		 * defined also...
 		 */
-		for (p=parmList; p->name; p++) {
-			if (!p->pval) continue;
-			if (p->flags & FLAG_CLRBP) {
-				free(*p->pval); *p->pval=0;
+		assert(&bootp_file && &bootp_srvr && do_bootp && INET_NTOP 
+				&& "APP NOT LINKED WITH ALL NECESSARY NETWORKING SYMBOLS");
+		/* now hack into the network configuration... */
+
+		if (boot_use_bootp && 'N'==toupper(*boot_use_bootp)) {
+			/* no bootp */
+			net_config.bootp=0;
+			/* get pointers to the first interface's configuration */
+			if (&net_config) {
+				struct rtems_bsdnet_ifconfig *ifc;
+	
+				for (ifc=net_config.ifconfig;
+					ifc && loopattach==ifc->attach;
+					ifc=ifc->next) {
+					/* should probably make sure it's not a point-to-point
+					 * IF either
+					 */
+				}
+				assert(ifc && "NO INTERFACE CONFIGURATION STRUCTURE FOUND");
+
+				ifc->ip_address = boot_my_ip;
+				boot_my_ip=0;
+				ifc->ip_netmask = boot_my_netmask;
+				boot_my_netmask = 0;
+			}
+			
+		} else {
+			the_apps_bootp=net_config.bootp;
+			net_config.bootp=my_bootp_intercept;
+			/* release the strings that will be set up by
+			 * bootp - bootpc relies on them being NULL
+			 */
+			for (p=parmList; p->name; p++) {
+				if (!p->pval) continue;
+				if (p->flags & FLAG_CLRBP) {
+					free(*p->pval); *p->pval=0;
+				}
 			}
 		}
 	}
@@ -338,14 +362,6 @@ printk("TSILL --- disabling BOOTP\n");
 }
 
 #ifdef USE_BOOTP_STUFF
-void
-__BSP_dummy_empty_routine(void)
-{
-/* this is never called - it's just linked in
- * by applications without networking support
- */
-}
-
 /* if the bootloader loaded a different file
  * than what the BOOTP/DHCP server says we have
  * then we want to forge the respective system
@@ -354,35 +370,26 @@ __BSP_dummy_empty_routine(void)
 static void
 my_bootp_intercept(void)
 {
-fprintf(stderr,"TSILL -- intercepting BOOTP\n");
-#ifdef TSILL
 	/* Do bootp first */
 	if (the_apps_bootp) {
 		the_apps_bootp();
-fprintf(stderr,"TSILL -- called APP BOOTP 0x%08x\n",the_apps_bootp);
 	} else {
-#ifdef TSILL
-		rtems_bsdnet_do_bootp();
-#endif
+		do_bootp();
 	}
 	/* OK - now let's see what we have */
 	if (boot_srvname) {
 		/* Seems we have a different file server */
-		if (inet_ntop(AF_INET,
-					&__BSP_dummy_bsdnet_bootp_server_address,
+		if (INET_NTOP(AF_INET,
+					&bootp_srvr,
 					boot_srvname,
 					strlen(boot_srvname))) {
-fprintf(stderr,"TSILL -- forget SERVER IP %s\n",boot_srvname);
-			rtems_bsdnet_bootp_server_address=__BSP_dummy_bsdnet_bootp_server_address;
 		}
 	}
-#endif
-	if (__BSP_dummy_bsdnet_bootp_file_name) {
+	if (boot_filename) {
 		/* Ha - they changed the file name */
-		rtems_bsdnet_bootp_boot_file_name=__BSP_dummy_bsdnet_bootp_file_name;
-fprintf(stderr,"TSILL -- forget FILENAME '%s'\n",rtems_bsdnet_bootp_boot_file_name);
+		bootp_file=boot_filename;
 		/* (dont bother freeing the old one - we don't really know if its malloced */
-		__BSP_dummy_bsdnet_bootp_file_name=0;
+		boot_filename=0;
 	}
 }
 #endif
@@ -580,6 +587,7 @@ void bsp_start( void )
   printk("Welcome to RTEMS RELEASE %s/svgm on %s/%s/%s\n",
 		  RTEMS_VERSION, chpt, CPU_NAME, get_ppc_cpu_type_name(myCpu));
   printk("SSRL Release $Name$/$Date$\n");
+  printk("Build Date: %s\n",BSP_build_date);
   printk("-----------------------------------------\n");
 #ifdef SHOW_MORE_INIT_SETTINGS  
   printk("Initial system stack at 0x%08x\n",stack);

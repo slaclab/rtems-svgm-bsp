@@ -24,7 +24,7 @@ SECTIONS
   .vectors :
   {
 	*(.svgm_preloader_section)
-	. = 0x100 ;
+	. = ABSOLUTE(0x100) ;
     *(.vectors)
   } > VECTORS
 
@@ -88,10 +88,9 @@ SECTIONS
      important than losing a page of the virtual address space (note
      that no actual memory is lost; the page which is skipped can not
      be referenced).  */
- .data    :
+ .data  ALIGN(0x1000)  :
   {
-  . = ALIGN(0x1000);
-	PROVIDE(__DATA_START__ = . );
+	PROVIDE(__DATA_START__ = ABSOLUTE(.) );
     *(.data)
     *(.gnu.linkonce.d*)	
     CONSTRUCTORS
@@ -129,16 +128,16 @@ SECTIONS
   PROVIDE (edata = .);
   .sbss      :
   {
-    PROVIDE (__sbss_start = .);
+    PROVIDE (__sbss_start = ABSOLUTE(.));
     *(.sbss)
     *(.scommon)
     *(.dynsbss)
-    PROVIDE (__sbss_end = .);
+    PROVIDE (__sbss_end = ABSOLUTE(.));
   } > CODE
   .plt   : { *(.plt) }	> CODE
   .bss       :
   {
-   PROVIDE (__bss_start = .);
+   PROVIDE (__bss_start = ABSOLUTE(.));
    *(.dynbss)
    *(.bss)
    *(COMMON)
@@ -194,3 +193,49 @@ SECTIONS
   .debug_varnames  0 : { *(.debug_varnames) }
   /* These must appear regardless of  .  */
 }
+
+/* "Conditional linking" is not supported, unfortunately.
+ * This BSP supports getting a network configuration
+ * from NVRAM settings. Hence, the startup code must
+ * access the 'rtems_bsdnet_config' structure.
+ * However, that symbol (and a couple of other networking
+ * related symbols) should only be referenced if the application
+ * actually does networking - otherwise a lot of
+ * code would pulled in from the libnetworking.a under
+ * all circumstances.
+ *
+ * bspstart.c uses these alias names and determines
+ * at runtime if they are void or valid (by comparing
+ * against the NULL address).
+ *
+ * Unfortunately, it is not possible to conditionally
+ * declare a symbol 'EXTERN' - hence we must rely on
+ * other code (probably cross-references within
+ * libnetworking itself) causing a reference to the
+ * 'real' symbols...
+ */
+
+__BSP_wrap_rtems_bsdnet_bootp_boot_file_name =
+	DEFINED(rtems_bsdnet_bootp_boot_file_name) ?
+		rtems_bsdnet_bootp_boot_file_name
+		: 0 ;
+__BSP_wrap_rtems_bsdnet_bootp_server_address =
+	DEFINED(rtems_bsdnet_bootp_server_address) ?
+		rtems_bsdnet_bootp_server_address
+		: 0 ;
+__BSP_wrap_rtems_bsdnet_config =
+	DEFINED(rtems_bsdnet_config) ?
+		rtems_bsdnet_config
+		: 0 ;
+__BSP_wrap_rtems_bsdnet_do_bootp =
+	DEFINED(rtems_bsdnet_do_bootp) ?
+		rtems_bsdnet_do_bootp
+		: 0 ;
+__BSP_wrap_inet_ntop =
+	DEFINED(inet_ntop) ?
+		inet_ntop
+		: 0 ;
+__BSP_wrap_rtems_bsdnet_loopattach =
+	DEFINED(rtems_bsdnet_loopattach) ?
+		rtems_bsdnet_loopattach
+		: 0 ;

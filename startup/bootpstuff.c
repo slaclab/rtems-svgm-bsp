@@ -10,19 +10,20 @@ typedef struct ParmRec_ {
 } ParmRec, *Parm;
 
 
+static char *boot_filename=0;
 static char *boot_srvname=0;
 static char *boot_use_bootp=0;
 static char	*boot_my_ip=0;
 static char	*boot_my_netmask=0;
 
 static ParmRec parmList[]={
-	{ "BP_FILE=",  &__BSP_dummy_bsdnet_bootp_file_name,
+	{ "BP_FILE=",  &boot_filename,
 			FLAG_MAND,
 	},
 	{ "BP_SRVR=",  &boot_srvname,
 			FLAG_MAND,
 	},
-	{ "BP_GTWY=",  &rtems_bsdnet_config.gateway,
+	{ "BP_GTWY=",  &net_config.gateway,
 			FLAG_CLRBP, 
 	},
 	{ "BP_MYIP=",  &boot_my_ip,
@@ -31,31 +32,31 @@ static ParmRec parmList[]={
 	{ "BP_MYMK=",  &boot_my_netmask,
 			FLAG_MAND | FLAG_CLRBP,
 	},
-	{ "BP_MYNM=",  &rtems_bsdnet_config.hostname,
+	{ "BP_MYNM=",  &net_config.hostname,
 			FLAG_CLRBP,
 	},
-	{ "BP_MYDN=",  &rtems_bsdnet_config.domainname,
+	{ "BP_MYDN=",  &net_config.domainname,
 			FLAG_CLRBP,
 	},
-	{ "BP_LOGH=",  &rtems_bsdnet_config.log_host,
+	{ "BP_LOGH=",  &net_config.log_host,
 			FLAG_CLRBP,
 	},
-	{ "BP_DNS1=",  &rtems_bsdnet_config.name_server[0],
+	{ "BP_DNS1=",  &net_config.name_server[0],
 			FLAG_CLRBP,
 	},
-	{ "BP_DNS2=",  &rtems_bsdnet_config.name_server[1],
+	{ "BP_DNS2=",  &net_config.name_server[1],
 			FLAG_CLRBP,
 	},
-	{ "BP_DNS3=",  &rtems_bsdnet_config.name_server[2],
+	{ "BP_DNS3=",  &net_config.name_server[2],
 			FLAG_CLRBP,
 	},
-	{ "BP_NTP1=",  &rtems_bsdnet_config.ntp_server[0],
+	{ "BP_NTP1=",  &net_config.ntp_server[0],
 			FLAG_CLRBP,
 	},
-	{ "BP_NTP2=",  &rtems_bsdnet_config.ntp_server[1],
+	{ "BP_NTP2=",  &net_config.ntp_server[1],
 			FLAG_CLRBP,
 	},
-	{ "BP_NTP3=",  &rtems_bsdnet_config.ntp_server[2],
+	{ "BP_NTP3=",  &net_config.ntp_server[2],
 			FLAG_CLRBP,
 	},
 	{ "BP_ENBL=",  &boot_use_bootp,
