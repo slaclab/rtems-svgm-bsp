@@ -36,6 +36,7 @@
 #define ERRENR1_PCI_TGT_ABT		(1<<7)
 
 #define ERRDR1				0xc1	/* error reporting register 1 (BYTE)	*/
+#define ERRENR2				0xc4	/* error enable register    2 (BYTE)    */
 #define ERRDR2				0xc5	/* error reporting register 2 (BYTE)	*/
 #define ERRDR_CLR_ALL		0xff	/* write 1 to clear error bits	*/
 
@@ -111,6 +112,21 @@ int				count;
 	return (errdr2<<24) | (errdr1<<16) | pcistat_orig;
 }
 
+static inline unsigned long
+MFHID0(void)
+{
+unsigned long rval;
+__asm__ __volatile__("mfspr %0, %1":"=r"(rval):"i"(HID0));
+return rval;
+}
+
+static inline void
+MTHID0(unsigned long val)
+{
+__asm__ __volatile__("mtspr %0, %1"::"i"(HID0),"r"(val));
+}
+
+
 void detect_host_bridge()
 {
   unsigned int id0;
@@ -150,6 +166,12 @@ void detect_host_bridge()
 	if ( ! ERR_STATUS_GRCKL_OK(errs)) {
 		printk("Cleared Grackle errors: pci_stat was 0x%04x errdr1 0x%02x errdr2 0x%02x\n",
 				errs & 0xffff, (errs>>16) & 0xff, (errs>>24) &0xff);
+	} else {
+		unsigned long hid0;
+		pci_write_config_byte(0,0,0,ERRENR1,0xff);
+		pci_write_config_byte(0,0,0,ERRENR2,0x81);
+		/* enable MCP interrupt */
+		MTHID0(MFHID0()|0x80000000);
 	}
   }
 }
