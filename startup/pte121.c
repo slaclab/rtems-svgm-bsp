@@ -494,15 +494,10 @@ triv121PgTblSDR1(Triv121PgTbl pt)
 		   );
 }
 
-/* these are implemented by libbsp/powerpc/shared/start/start.S */
-void MMUon(void);
-void MMUoff(void);
-
 void
 triv121PgTblActivate(Triv121PgTbl pt)
 {
 #ifndef DEBUG_MAIN
-unsigned long msr=0; /* keep compiler happy */
 unsigned long sdr1=triv121PgTblSDR1(pt);
 #endif
 	pt->active=1;
@@ -521,44 +516,41 @@ unsigned long sdr1=triv121PgTblSDR1(pt);
 	__asm__ __volatile__ ("sync");
 #endif
 
-	/* get MSR and switch interrupts off - just in case */
-	__asm__ __volatile__(
-		"mfmsr %0\n"
-		"andc  %0, %0, %2\n"
-		"mtmsr %0\n"
-		:"=r&"(msr):"0"(msr),"r"(MSR_EE)
-	);
-	/* switch MMU off if it is not off already; the book
-	 * says that SDR1 must not be changed with either
-	 * MSR_IR or MSR_DR set. I would guess that it could
-	 * be safe as long as the IBAT & DBAT mappings override
-	 * the page table...
-	 */
-	if ( msr & (MSR_IR|MSR_DR) )
-		MMUoff();
-
 	/* This section of assembly code takes care of the
 	 * following:
+	 * - get MSR and switch interrupts + MMU off
 	 *
 	 * - load up the segment registers with a
 	 *   1:1 effective <-> virtual mapping;
 	 *   give user & supervisor keys
 	 *
-	 * - setup SDR1
-	 *
-	 * - Then flush all TLBs;
+	 * - flush all TLBs;
 	 *   NOTE: the TLB flushing code is probably
 	 *         CPU dependent!
+	 *
+	 * - setup SDR1
+	 *
+	 * - restore original MSR
 	 */
 	__asm__ __volatile(
 		"	mtctr	%0\n"
+		/* Get MSR and switch interrupts off - just in case.
+		 * Also switch the MMU off; the book
+		 * says that SDR1 must not be changed with either
+		 * MSR_IR or MSR_DR set. I would guess that it could
+		 * be safe as long as the IBAT & DBAT mappings override
+		 * the page table...
+		 */
+		"	mfmsr	%0\n"
+		"	andc	%6, %0, %6\n"
+		"	mtmsr	%6\n"
+		"	isync	\n"
+		/* set up the segment registers */
 		"	li		%0, 0\n"
 		"1:	mtsrin	%1, %0\n"
 		"	addis	%0, %0, 0x1000\n"	/* address next SR */
 		"	addi	%1, %1, 1\n"		/* increment VSID  */
 		"	bdnz	1b\n"
-		/* set up SDR1 */
-		"   mtspr	%4, %5\n"
 		/* Now flush all TLBs, starting with the topmost index */
 		"	lis		%0, %2@h\n"	
 		"2:	addic.	%0, %0, -%3\n"		/* address the next one (decrementing) */
@@ -566,21 +558,20 @@ unsigned long sdr1=triv121PgTblSDR1(pt);
 		"	bgt		2b\n"
 		"	tlbsync\n"
 		"	sync\n"
+		/* set up SDR1 */
+		"   mtspr	%4, %5\n"
+		/* restore original MSR  */
+		"	mtmsr	%6\n"
+		"	isync	\n"
 		::"b"(16), "b"(KEY_USR | KEY_SUP),
 		  "i"(FLUSH_EA_RANGE), "i"(1<<LD_PG_SIZE),
-		  "i"(SDR1), "r"(sdr1)
+		  "i"(SDR1), "r"(sdr1),
+		  "r"(MSR_EE | MSR_IR | MSR_DR)
 		: "ctr","cc");
-
-	/* switch MMU back on if it was on on entry */
-	if ( msr & (MSR_IR|MSR_DR) )
-		MMUon();
 
 	/* At this point, BAT0 is probably still active; it's the
 	 * caller's job to deactivate it...
 	 */
-
-	/* restore original MSR  */
-	__asm__ __volatile__("mtmsr %0"::"r"(msr));
 #endif
 }
 

@@ -57,7 +57,7 @@ triv121PgTblInit(unsigned long base, unsigned ldSize);
  *          memory (assuming 'memsize' is a power of two):
  *
  *	ldSize = triv121PgTblLdMinSize(memsize);
- *  memsize -= (1<<ldSize);	/* reduce memory available to RTEMS */
+ *  memsize -= (1<<ldSize);	/ * reduce memory available to RTEMS * /
  *  pgTbl  = triv121PgTblInit(memsize,ldSize);
  * 
  */
