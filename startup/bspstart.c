@@ -731,6 +731,9 @@ void bsp_start( void )
    * generation. Note that config space access to non-existent devices
    * results in a master abort
    *
+   * (call this routine only after the CPU table has been initialized;
+   * it uses rtems_bsp_delay())
+   *
    * Call twice; once silently to avoid printing the errors
    * caused by the PCI config space scan. The second time
    * to inform the user that MCP/TEA interrupts will be enabled.
