@@ -73,7 +73,7 @@ static int gx_fix = 0;
    There are no ill effects from too-large receive rings. */
 #define TX_RING_SIZE	16
 #define TX_QUEUE_SIZE	12		/* Must be > 4 && <= TX_RING_SIZE */
-#define RX_RING_SIZE	32		/* TSILL_TODO was 64, reduced to test because RTEMS ran out of mbufs */
+#define RX_RING_SIZE	32		/* TSILL_TODO was 64, reduced because RTEMS ran out of mbufs */
 /* TODO: use of MBUF clusters (4k each) seems to be quite wasteful
  * for ethernet...
  */
@@ -154,6 +154,7 @@ MODULE_PARM(gx_fix, "i");
 
 #include <rtems.h>
 #include <bspIo.h>						/* printk */
+#include <stdio.h>						/* printf for statistics */
 #include <bsp/irq.h>
 #include <libcpu/byteorder.h>			/* st_le32 & friends */
 #include <libcpu/io.h>					/* inp & friends */
@@ -162,6 +163,7 @@ MODULE_PARM(gx_fix, "i");
 #undef _IO_BASE
 #endif
 #define _IO_BASE	0xfe000000			/* CHRP IO_BASE */
+#warning "YELLOWFIN: should fix _IO_BASE hack"
 #define virt_to_bus(addr)	((addr))	/* on CHRP :-) */
 #define bus_to_virt(addr)	((addr))	/* on CHRP :-) */
 #define le32_to_cpu(var)	ld_le32((volatile unsigned *)&var)
@@ -198,8 +200,8 @@ MODULE_PARM(gx_fix, "i");
  * bsdnet redefines malloc to its own rtems_bsdnet_malloc
  */
 
-/* TODO, for the moment, the synergy method is hardcoded
- *       should the driver be moved out to the libchip dir,
+/* TODO, for the moment, the synergy method is hardcoded.
+ *       Should the driver be moved out to the libchip dir,
  *       then we must probably invoke a BSP specific routine here
  */
 #ifndef BSP_YELLOWFIN_SUPPLY_HWADDR
@@ -436,7 +438,6 @@ struct yellowfin_private {
 	int chip_id, drv_flags;
 	long in_interrupt;
 	struct yellowfin_desc *rx_head_desc;
-	/* TODO: wraparound of the ring indices */
 	unsigned int cur_rx, dirty_rx;		/* Producer/consumer ring indices */
 	unsigned int rx_buf_sz;				/* Based on MTU+slack. */
 	struct tx_status_words *tx_tail_desc;
@@ -463,6 +464,7 @@ struct yellowfin_private {
 		unsigned long 	length_errors;
 		unsigned long	frame_errors;
 		unsigned long	crc_errors;
+		unsigned long	nTxIrqs, nRxIrqs;
 	} stats;
 };
 
@@ -470,11 +472,12 @@ struct yellowfin_private {
 #ifndef BSP_YELLOWFIN_SUPPLY_HWADDR
 static int read_eeprom(long ioaddr, int location);
 #endif
+static void yellowfin_stats(struct yellowfin_private *yp);
 static int mdio_read(long ioaddr, int phy_id, int location);
 static void mdio_write(long ioaddr, int phy_id, int location, int value);
 static int yellowfin_ioctl(struct ifnet *ifp, int cmd, caddr_t data);
 static int yellowfin_init_hw(struct yellowfin_private *yp);
-static void yellowfin_timer(unsigned long data);
+static void yellowfin_timer(struct ifnet *ifp);
 #ifdef TSILL_TODO
 static void yellowfin_tx_timeout(struct net_device *dev);
 #endif
@@ -634,10 +637,11 @@ rtems_yellowfin_driver_attach(struct rtems_bsdnet_ifconfig *config, int attach)
 	ifp->if_mtu = config->mtu ? config->mtu : ETHERMTU;
 
 	/* The Yellowfin-specific entries in the device structure. */
-	ifp->if_init = yellowfin_init;
-	ifp->if_ioctl = yellowfin_ioctl;
-	ifp->if_start = yellowfin_start;
-	ifp->if_output = ether_output;
+	ifp->if_init     = yellowfin_init;
+	ifp->if_ioctl    = yellowfin_ioctl;
+	ifp->if_start    = yellowfin_start;
+	ifp->if_output   = ether_output;
+	ifp->if_watchdog = yellowfin_timer;
 
 	ifp->if_flags = IFF_BROADCAST | IFF_SIMPLEX;
 	if (ifp->if_snd.ifq_maxlen == 0)
@@ -786,10 +790,14 @@ rtems_event_set	evs=0;
 			yp->intr_status = intr_status;
 			evs |= ERR_EVENT;
 	}
-	if (IntrTxDone & intr_status)
+	if (IntrTxDone & intr_status) {
+			yp->stats.nTxIrqs++;
 			evs |= TX_EVENT;
-	if ((IntrRxDone|IntrEarlyRx)&intr_status)
+	}
+	if ((IntrRxDone|IntrEarlyRx)&intr_status) {
+			yp->stats.nRxIrqs++;
 			evs |= RX_EVENT;
+	}
 	rtems_event_send(yp->daemonTid, evs);
 }
 
@@ -870,14 +878,8 @@ static int yellowfin_init_hw(struct yellowfin_private *yp)
 	outl(0x80008000, ioaddr + RxCtrl);		/* Start Rx and Tx channels. */
 	outl(0x80008000, ioaddr + TxCtrl);
 
-#ifdef TSILL_TODO
 	/* Set the timer to check for link beat. */
-	init_timer(&yp->timer);
-	yp->timer.expires = jiffies + 3*HZ;
-	yp->timer.data = (unsigned long)dev;
-	yp->timer.function = &yellowfin_timer;				/* timer handler */
-	add_timer(&yp->timer);
-#endif
+	ifp->if_timer = 3*IFNET_SLOWHZ; /* seconds */
 
 	if (yellowfin_debug > 1) {
 		printk("%s%d: Done yellowfin_init_hw().\n",
@@ -895,7 +897,8 @@ static void yellowfin_init(void *arg)
 				yp, yp->daemonTid);
 
 	if (yp->daemonTid) {
-		printk("Yellowfin: daemon already up, doing nothing\n");
+		if (yellowfin_debug>1)
+			printk("Yellowfin: daemon already up, doing nothing\n");
 		return;
 	}
 	/* initialize the hardware (we are holding the network semaphore at this point) */
@@ -918,32 +921,32 @@ static void yellowfin_init(void *arg)
 		printk("yellowfin_init(): leaving.\n");
 }
 
-#ifdef TSILL_TODO
-static void yellowfin_timer(unsigned long data)
+static void yellowfin_timer(struct ifnet *ifp)
 {
-	struct net_device *dev = (struct net_device *)data;
-	struct yellowfin_private *yp = (struct yellowfin_private *)dev->priv;
-	long ioaddr = dev->base_addr;
-	int next_tick = 60*HZ;
+	struct yellowfin_private *yp = (struct yellowfin_private *)ifp->if_softc;
+	long ioaddr = yp->base_addr;
+	int next_tick = 60*IFNET_SLOWHZ;
 
 	if (yellowfin_debug > 3) {
-		printk(KERN_DEBUG "%s: Yellowfin timer tick, status %8.8x.\n",
-			   dev->name, inw(ioaddr + IntrStatus));
+		printk("%s: Yellowfin timer tick, status %08x.\n",
+			   ifp->if_name, inw(ioaddr + IntrStatus));
 	}
 
+#ifdef TSILL_TODO
 	if (jiffies - dev->trans_start > TX_TIMEOUT
 		&& yp->cur_tx - yp->dirty_tx > 1
 		&& netif_queue_paused(dev))
 		yellowfin_tx_timeout(dev);
+#endif
 
 	if (yp->mii_cnt) {
 		int mii_reg1 = mdio_read(ioaddr, yp->phys[0], 1);
 		int mii_reg5 = mdio_read(ioaddr, yp->phys[0], 5);
 		int negotiated = mii_reg5 & yp->advertising;
 		if (yellowfin_debug > 1)
-			printk(KERN_DEBUG "%s: MII #%d status register is %4.4x, "
-				   "link partner capability %4.4x.\n",
-				   dev->name, yp->phys[0], mii_reg1, mii_reg5);
+			printk("%s: MII #%d status register is %04x, "
+				   "link partner capability %04x.\n",
+				   ifp->if_name, yp->phys[0], mii_reg1, mii_reg5);
 
 		if ( ! yp->duplex_lock &&
 			 ((negotiated & 0x0300) == 0x0100
@@ -953,15 +956,15 @@ static void yellowfin_timer(unsigned long data)
 		outw(0x101C | (yp->full_duplex ? 2 : 0), ioaddr + Cnfg);
 
 		if (mii_reg1 & 0x0004)
-			next_tick = 60*HZ;
+			next_tick = 60*IFNET_SLOWHZ;
 		else
-			next_tick = 3*HZ;
+			next_tick = 3*IFNET_SLOWHZ;
 	}
 
-	yp->timer.expires = jiffies + next_tick;
-	add_timer(&yp->timer);
+	ifp->if_timer = next_tick;
 }
 
+#ifdef TSILL_TODO
 static void yellowfin_tx_timeout(struct net_device *dev)
 {
 	struct yellowfin_private *yp = (struct yellowfin_private *)dev->priv;
@@ -1117,7 +1120,6 @@ static int yellowfin_sendpacket(struct mbuf *m, struct yellowfin_private *yp)
 	/* Calculate the next Tx descriptor entry. */
 	entry = yp->cur_tx % TX_RING_SIZE;
 
-	/* TSILL_TODO: should free old or check for NULL here */
 #ifndef TSILL_FINAL
 	if (yp->tx_mbuf[entry])
 		rtems_panic("yellowfin: mbuf leak");
@@ -1743,9 +1745,8 @@ static int yellowfin_stop_hw(struct  yellowfin_private *yp)
 			   yp->cur_tx, yp->dirty_tx, yp->cur_rx, yp->dirty_rx);
 	}
 
-#ifdef TSILL_TODO
-	del_timer(&yp->timer);
-#endif
+	/* stop the timer, just in case */
+	ifp->if_timer = 0;
 
 #if defined(__i386__)
 #error "TODO: i386 support not implemented"
@@ -1810,7 +1811,6 @@ static int yellowfin_stop_hw(struct  yellowfin_private *yp)
 	return 0;
 }
 
-#ifdef TSILL_TODO
 
 /* Set or clear the multicast filter for this adaptor. */
 
@@ -1836,66 +1836,78 @@ static inline unsigned ether_crc_le(int length, unsigned char *data)
 	return crc;
 }
 
-#endif /* TSILL_TODO */
 
 static void set_rx_mode(struct yellowfin_private *yp)
 {
+	struct arpcom *ac = &yp->arpcom;
+	struct ifnet  *ifp = &ac->ac_if;
 	long ioaddr = yp->base_addr;
 	u16 cfg_value = inw(ioaddr + Cnfg);
 
 	/* Stop the Rx process to change any value. */
 	outw(cfg_value & ~0x1000, ioaddr + Cnfg);
-#ifdef TSILL_TODO
-	if (dev->flags & IFF_PROMISC) {			/* Set promiscuous. */
+	if (ifp->if_flags & IFF_PROMISC) {			/* Set promiscuous. */
 		/* Unconditionally log net taps. */
-		printk(KERN_NOTICE "%s: Promiscuous mode enabled.\n", dev->name);
+		printk("%s: Promiscuous mode enabled.\n", ifp->if_name);
 		outw(0x000F, ioaddr + AddrMode);
-	} else if ((dev->mc_count > 64)  ||  (dev->flags & IFF_ALLMULTI)) {
+	} else if ((ac->ac_multicnt > 64)  ||  (ifp->if_flags & IFF_ALLMULTI)) {
 		/* Too many to filter well, or accept all multicasts. */
 		outw(0x000B, ioaddr + AddrMode);
-	} else if (dev->mc_count > 0) { /* Must use the multicast hash table. */
-		struct dev_mc_list *mclist;
+	} else if (ac->ac_multicnt > 0) { /* Must use the multicast hash table. */
+		struct ether_multi *enm;
 		u16 hash_table[4];
 		int i;
 		memset(hash_table, 0, sizeof(hash_table));
-		for (i = 0, mclist = dev->mc_list; mclist && i < dev->mc_count;
-			 i++, mclist = mclist->next) {
+		/* TODO: counting i seems to be redundant with enm list traversal
+		 *       (remember: this code originated from linux/skb...)
+		 */
+		for (i = 0, enm = ac->ac_multiaddrs; enm && i < ac->ac_multicnt;
+			 i++, enm = enm->enm_next) {
+			unsigned char *enaddr=enm->enm_ac->ac_enaddr;
 			/* Due to a bug in the early chip versions, multiple filter
 			   slots must be set for each address. */
 			if (yp->drv_flags & HasMulticastBug) {
-				set_bit((ether_crc_le(3, mclist->dmi_addr) >> 3) & 0x3f,
+				set_bit((ether_crc_le(3, enaddr) >> 3) & 0x3f,
 						hash_table);
-				set_bit((ether_crc_le(4, mclist->dmi_addr) >> 3) & 0x3f,
+				set_bit((ether_crc_le(4, enaddr) >> 3) & 0x3f,
 						hash_table);
-				set_bit((ether_crc_le(5, mclist->dmi_addr) >> 3) & 0x3f,
+				set_bit((ether_crc_le(5, enaddr) >> 3) & 0x3f,
 						hash_table);
 			}
-			set_bit((ether_crc_le(6, mclist->dmi_addr) >> 3) & 0x3f,
+			set_bit((ether_crc_le(6, enaddr) >> 3) & 0x3f,
 					hash_table);
 		}
 		/* Copy the hash table to the chip. */
 		for (i = 0; i < 4; i++)
 			outw(hash_table[i], ioaddr + HashTbl + i*2);
+
+		/* TODO: remove this, once this feature has been tested */
+		printk("Yellowfin: WARNING: setting multicast hash table has not been tested yet\n");
 		outw(0x0003, ioaddr + AddrMode);
-	} else
-#endif
-       	{					/* Normal, unicast/broadcast-only mode. */
+	} else {					/* Normal, unicast/broadcast-only mode. */
 		outw(0x0001, ioaddr + AddrMode);
 	}
 	/* Restart the Rx process. */
 	outw(cfg_value | 0x1000, ioaddr + Cnfg);
 }
 
+
+/* TODO: the SIOxMIIxx constants are not defined yet */
+#if defined(SIOCGMIIPHY) && defined(SIOCGMIIREG) && defined(SIOCSMIIREG)
+#define USE_MII_IOCTLS
+#warning "YELLOWFIN: SIOCxMIIxx seem to be defined, cleanup yellowfin.c..."
+#endif
+
 static int yellowfin_ioctl(struct ifnet *ifp, int cmd, caddr_t arg)
 {
 	struct yellowfin_private *np = ifp->if_softc;
-#ifdef USE_MII_IOCTLS /* TODO: the constants are not defined yet */
+#ifdef USE_MII_IOCTLS
 	long ioaddr = np->base_addr;
+#endif
 #if 0
 	u16 *data = (u16 *)arg;
 #else
 	/* TODO: I believe arg is a struct ifreq */
-#endif
 #endif
 
 	if (yellowfin_debug>1)
@@ -1952,16 +1964,25 @@ static int yellowfin_ioctl(struct ifnet *ifp, int cmd, caddr_t arg)
 		}
 		break;
 
-#ifdef TSILL_TODO
 	case SIO_RTEMS_SHOW_STATS:
-		dec21140_stats (sc);
+		yellowfin_stats (np);
 		break;
-#endif
 
 	}
 	if (yellowfin_debug>1)
 		printk("Yellowfin: leaving ioctl...\n");
 	return 0;
+}
+
+static void yellowfin_stats(struct yellowfin_private *yp)
+{
+		printf("      Rx Interrupts:%-8lu\n", yp->stats.nRxIrqs);
+		printf("     Framing Errors:%-8lu",   yp->stats.frame_errors);
+		printf("         Crc Errors:%-8lu",   yp->stats.crc_errors);
+		printf("   Oversized Frames:%-8lu\n", yp->stats.length_errors);
+
+		printf("      Tx Interrupts:%-8lu\n", yp->stats.nTxIrqs);
+		printf(" Reassembled Frames:%-8lu\n", yp->stats.txReassembled);
 }
 
 
