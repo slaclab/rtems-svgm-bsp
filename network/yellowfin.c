@@ -36,7 +36,7 @@ static const char version2[] =
 
 int yellowfin_debug = 1;				/* 1 normal messages, 0 quiet .. 7 verbose. */
 /* Maximum events (Rx packets, etc.) to handle at each event reception. */
-static int max_interrupt_work = 20;
+int yellowfin_max_interrupt_work = 20;
 #ifdef YF_PROTOTYPE						/* Support for prototype hardware errata. */
 /* System-wide count of bogus-rx frames. */
 static int bogus_rx = 0;
@@ -52,7 +52,7 @@ static int fifo_cfg = 0x0020;			/* Bypass external Tx FIFO. */
 
 /* Set the copy breakpoint for the copy-only-tiny-frames scheme.
    Setting to > 1514 effectively disables this feature. */
-static int rx_copybreak = 0;
+int yellowfin_rx_copybreak = 0;
 
 /* Used to pass the media type, etc.
    No media types are currently defined.  These exist for driver
@@ -138,10 +138,10 @@ char kernel_version[] = UTS_RELEASE;
 
 MODULE_AUTHOR("Donald Becker <becker@scyld.com>");
 MODULE_DESCRIPTION("Packet Engines Yellowfin G-NIC Gigabit Ethernet driver");
-MODULE_PARM(max_interrupt_work, "i");
+MODULE_PARM(yellowfin_max_interrupt_work, "i");
 MODULE_PARM(mtu, "i");
 MODULE_PARM(debug, "i");
-MODULE_PARM(rx_copybreak, "i");
+MODULE_PARM(yellowfin_rx_copybreak, "i");
 MODULE_PARM(options, "1-" __MODULE_STRING(MAX_UNITS) "i");
 MODULE_PARM(full_duplex, "1-" __MODULE_STRING(MAX_UNITS) "i");
 MODULE_PARM(gx_fix, "i");
@@ -1261,7 +1261,7 @@ static void yellowfin_daemon(void *arg)
 {
 struct yellowfin_private *yp = (struct yellowfin_private*)arg;
 long		ioaddr = yp->base_addr;
-int		boguscnt = max_interrupt_work;
+int		boguscnt = yellowfin_max_interrupt_work;
 rtems_event_set	events;
 struct mbuf	*m;
 struct ifnet	*ifp=&yp->arpcom.ac_if;
@@ -1299,7 +1299,7 @@ struct ifnet	*ifp=&yp->arpcom.ac_if;
 			break;
 		}
 
-		boguscnt = max_interrupt_work;
+		boguscnt = yellowfin_max_interrupt_work;
 
 		if (events & RX_EVENT) {
 			boguscnt-=yellowfin_rx(yp);
@@ -1565,7 +1565,7 @@ static int yellowfin_rx(struct yellowfin_private *yp)
 #endif
 			/* Check if the packet is long enough to just pass up the mbuf
 			   without copying to a properly sized mbuf. */
-			if (pkt_len > rx_copybreak) {
+			if (pkt_len > yellowfin_rx_copybreak) {
 				m = yp->rx_mbuf[entry];
 				yp->rx_mbuf[entry] = NULL;
 #ifndef final_version				/* Remove after testing. */
