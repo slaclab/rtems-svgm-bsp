@@ -16,10 +16,6 @@ SECTIONS
   {
  	*(.entry_point_section)
   }
-  .svgm_preloader_section :
-  {
-	*(.svgm_preloader_section)
-   } > VECTORS
 
   /*
    * This section is used only if NO_DYNAMIC_EXCEPTION_VECTOR_INSTALL
@@ -27,6 +23,8 @@ SECTIONS
    */
   .vectors :
   {
+	*(.svgm_preloader_section)
+	. = 0x100 ;
     *(.vectors)
   } > VECTORS
 
