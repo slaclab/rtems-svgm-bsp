@@ -153,7 +153,7 @@ int						quiet=0;
 
 				/* it's MCP; gather info from the host bridge */
 
-				gerr=_BSP_clear_hostbridge_errors();
+				gerr=_BSP_clear_hostbridge_errors(0,0);
 				if (0x80 != gerr) {
 					pci_read_config_byte(0,0,0,0xc3,&c1);
 					pci_read_config_byte(0,0,0,0xc7,&c2);
