@@ -40,13 +40,26 @@ typedef struct Triv121PgTblRec_ *Triv121PgTbl;
  *            with read-only access. While this prevents
  *            the CPU from overwriting the page table,
  *            it can still be corrupted by PCI bus masters
- *            (like DMA engines, [VME] bridges etc.)
+ *            (like DMA engines, [VME] bridges etc.) and
+ *			  even by this CPU if either the MMU is off 
+ *			  or if there is a DBAT mapping granting write
+ *            access...
  */
 Triv121PgTbl
 triv121PgTblInit(unsigned long base, unsigned ldSize);
 
-/* get the log2 of the minimal page size needed
- * for mapping 'size' bytes
+/* get the log2 of the minimal page table size needed
+ * for mapping 'size' bytes.
+ *
+ * EXAMPLE: create a page table which maps the entire
+ *          physical memory. The page table itself shall
+ *          be allocated at the top of the available
+ *          memory (assuming 'memsize' is a power of two):
+ *
+ *	ldSize = triv121PgTblLdMinSize(memsize);
+ *  memsize -= (1<<ldSize);	/* reduce memory available to RTEMS */
+ *  pgTbl  = triv121PgTblInit(memsize,ldSize);
+ * 
  */
 unsigned long
 triv121PgTblLdMinSize(unsigned long size);
@@ -81,7 +94,8 @@ triv121PgTblMap(
 												 *
 												 * NOTE: if VSID < 0 (TRIV121_121_VSID), 'start' is inter-
 												 *       preted as an effective address (EA), i.e. all 32
-												 *       bits are used!
+												 *       bits are used - the most significant four going into
+												 *       to the VSID...
 											   	 */
 
 				unsigned long numPages,			/* number of pages to map */
@@ -90,6 +104,7 @@ triv121PgTblMap(
 												 * (Write thru, cache Inhibit, coherent Memory,
 												 *  Guarded memory)
 												 */
+
 				unsigned protection				/* 'pp' access protection: Super      User
 												 *
 												 *   0                      r/w       none
@@ -117,9 +132,9 @@ triv121PgTblMap(
 #define TRIV121_MAP_SUCCESS		(-1) /* triv121PgTblMap() returns this on SUCCESS */
 
 /* get a handle to the one and only page table
- * (must have been initialized)
+ * (must have been initialized/allocated)
  *
- * RETURNS: NULL if the page table has not been initialized.
+ * RETURNS: NULL if the page table has not been initialized/allocated.
  */
 Triv121PgTbl
 triv121PgTblGet(void);
@@ -142,7 +157,7 @@ triv121PgTblSDR1(Triv121PgTbl pgTbl);
  * NOTE: This routine does not change any BATs. Since these
  *       have priority over the page table, the user
  *       may have to switch overlapping BATs OFF in order
- *       for the page table mappings taking effect.
+ *       for the page table mappings to take effect.
  */
 void
 triv121PgTblActivate(Triv121PgTbl pgTbl);

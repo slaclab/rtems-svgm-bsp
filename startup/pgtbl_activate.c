@@ -31,6 +31,7 @@ __VGM_default_pgtbl_activate(Triv121PgTbl pt)
 	 */
 	triv121PgTblActivate(pt);
 
+	/* finally, switch off DBAT0 */
 	__asm__ __volatile__(
 			"mfspr %%r0, %0\n"
 			"andc  %%r0, %%r0, %1\n"
