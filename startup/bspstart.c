@@ -256,7 +256,7 @@ void bsp_pretasking_hook(void)
 {
     rtems_unsigned32        heap_start=heapStart();    
 	CmdLine					cmdline=(CmdLine)heap_start;
-    rtems_unsigned32        heap_size;
+    rtems_unsigned32        heap_size,heap_sbrk_spared;
 	char					*buf;
 #ifdef USE_BOOTP_STUFF
 	Parm					p;
@@ -278,10 +278,13 @@ void bsp_pretasking_hook(void)
 			memcpy(buf,cmdline->buf,cmdline->size);
 	}
 
+	heap_sbrk_spared=_bsp_sbrk_init(heap_start, &heap_size);
+
 #ifdef SHOW_MORE_INIT_SETTINGS
-    printk(" HEAP start %x  size %x\n", heap_start, heap_size);
+   	printk(" HEAP start %x  size %x (%x bytes spared for sbrk)\n", heap_start, heap_size, heap_sbrk_spared);
 #endif    
-    bsp_libc_init((void *) heap_start, heap_size, 0);
+
+    bsp_libc_init((void *) 0, heap_size, heap_sbrk_spared);
 
 	/* put the commandline parameters into the environment */
 	if (buf) {
