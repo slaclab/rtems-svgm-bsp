@@ -51,6 +51,9 @@
  * Hence, using the A24 and A16 macros is probably safe.
  */
 
+#define BSP_vme_init() \
+	vmeUniverseInit
+
 #define BSP_vme2local_adrs(am, vmeaddr, plocaladdr) \
 	vmeUniverseBusToLocalAdrs(am, vmeaddr, plocaladdr)
 
