@@ -14,7 +14,7 @@ C_O_FILES = $(C_FILES:%.c=$(ARCH)/%.o)
 
 H_FILES = ../synergy/bspVGM.h ../synergy/synergyregs.h
 
-EXTRA_DIST = board.c  led.c  reboot.c  watchdog.c
+EXTRA_DIST = board.c  led.c  reboot.c  watchdog.c bspVGM.h synergyregs.h
 
 
 OBJS = $(C_O_FILES)
