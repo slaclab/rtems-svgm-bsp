@@ -4,8 +4,10 @@
 
 AUTOMAKE_OPTIONS = foreign 1.4
 
-H_FILES = ../../shared/include/nvram.h ../include/bsp.h \
-    ../../../shared/include/coverhd.h ../include/residual.h
+include_HEADERS = bspopts.h
+
+H_FILES = ../include/bsp.h \
+    ../../../shared/include/coverhd.h
 
 BSP_H_FILES = ../../shared/console/consoleIo.h ../../shared/console/uart.h \
     ../irq/irq.h
@@ -16,7 +18,7 @@ $(PROJECT_INCLUDE):
 $(PROJECT_INCLUDE)/bsp:
 	$(mkinstalldirs) $@
 
-$(PROJECT_INCLUDE)/nvram.h: ../../shared/include/nvram.h
+$(PROJECT_INCLUDE)/%.h: %.h
 	$(INSTALL_DATA) $< $@
 
 $(PROJECT_INCLUDE)/bsp.h: ../include/bsp.h
@@ -34,16 +36,13 @@ $(PROJECT_INCLUDE)/bsp/uart.h: ../../shared/console/uart.h
 $(PROJECT_INCLUDE)/bsp/irq.h: ../irq/irq.h
 	$(INSTALL_DATA) $< $@
 
-$(PROJECT_INCLUDE)/bsp/residual.h: ../include/residual.h
-	$(INSTALL_DATA) $< $@
-
-
-PREINSTALL_FILES = $(PROJECT_INCLUDE) $(PROJECT_INCLUDE)/bsp \
-    $(PROJECT_INCLUDE)/nvram.h $(PROJECT_INCLUDE)/bsp.h \
+TMPINSTALL_FILES = $(PROJECT_INCLUDE) $(PROJECT_INCLUDE)/bsp \
+    $(PROJECT_INCLUDE)/bsp.h \
     $(PROJECT_INCLUDE)/coverhd.h $(PROJECT_INCLUDE)/bsp/consoleIo.h \
-    $(PROJECT_INCLUDE)/bsp/uart.h $(PROJECT_INCLUDE)/bsp/residual.h\
-     $(PROJECT_INCLUDE)/bsp/irq.h
+    $(PROJECT_INCLUDE)/bsp/uart.h $(PROJECT_INCLUDE)/bsp/irq.h \
+    $(include_HEADERS:%=$(PROJECT_INCLUDE)/%)
 
-all-local: $(PREINSTALL_FILES)
+all-local: $(TMPINSTALL_FILES)
 
+include $(top_srcdir)/../../../../../../automake/force-preinstall.am
 include $(top_srcdir)/../../../../../../automake/local.am
