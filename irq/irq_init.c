@@ -94,6 +94,12 @@ void BSP_rtems_irq_mng_init(unsigned cpuId)
 	  BSP_panic("Unable to find MPIC");
   }
 
+  /* On the VGM series, the OpenPIC timer frequency is hardcoded to the
+   * PCI bus speed (33MHz) / 8
+   * Set it up now, so openpic_init() reports this value.
+   */
+  out_le32(&OpenPIC->Global.TimerFrequency, 33333333/8);
+
   
   /*
    * First initialize the Interrupt management hardware
