@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- *  Copyright (C) 2001 Till Straumann <strauman@slac.stanford.edu>
+ *  Copyright (C) 2001,2003 Till Straumann <strauman@slac.stanford.edu>
  *
  */
 
@@ -42,6 +42,28 @@
 #define ERRDR2				0xc5	/* error reporting register 2 (BYTE)	*/
 #define ERRDR_CLR_ALL		0xff	/* write 1 to clear error bits	*/
 
+/* Values Synergy uses in their BSP;
+ *
+ * My VGMD froze with more paranoid settings
+ * while the VGM5 worked fine.
+ *
+ * Note that the ERRENR bits only affect MCP
+ * but not TEA and most (if not all - I was
+ * unable to test anything other than the
+ * PCI_TGT_ABT and PCI_MAS_ABT which are
+ * crucial for probing) of the error conditions
+ * seem to pull TEA anyways (unfortunately,
+ * this is not precisely documented in the
+ * Grackle manual)...
+ *
+ * The right thing to do would probably be
+ * enabling only stuff that is not pulling TEA
+ * but that's not documented and some cases
+ * are difficult to test :-(
+ */
+#define ERRENR1_VAL				0x79
+#define ERRENR2_VAL				0xa1
+
 extern pci_config_access_functions pci_direct_functions;
 extern pci_config_access_functions pci_indirect_functions;
 
@@ -76,26 +98,23 @@ int				count;
 
 	count=10;
 	do {
-#define CLEAR_PCI_STATUS_FIRST
-		/* although the MPC106 manual states that we should
-		 * read ERRDR1/2 first, then PCI_STATUS and then
-		 * read back PCI_STATUS, I found that it is more
-		 * reliable on the VGM to write PCI_STATUS first
-		 * then write ERRDR and finally read PCI_STATUS back...
-		 */
-#ifdef CLEAR_PCI_STATUS_FIRST
-		/* clear PCI status register */
-		pci_write_config_word(0,0,0,PCI_STATUS, 0xffff);
-#endif
 		/* clear error reporting registers */
+
 		pci_write_config_byte(0,0,0,ERRDR1,ERRDR_CLR_ALL);
 		pci_write_config_byte(0,0,0,ERRDR2,ERRDR_CLR_ALL);
 
-#ifndef CLEAR_PCI_STATUS_FIRST
 		/* clear PCI status register */
 		pci_write_config_word(0,0,0,PCI_STATUS, 0xffff);
-#endif
+
+		/* read  new status */
 		pci_read_config_word(0,0,0,PCI_STATUS, &pcistat);
+
+		/* this seems to be necessary to reliably
+		 * clear the master abort flag - mysterious...
+		 */
+		__asm__ __volatile__("sync");
+		rtems_bsp_delay(2);
+		__asm__ __volatile__("sync");
 	} while ( ! ERR_STATUS_GRCKL_OK(pcistat) && count-- );
 
 	/* we also read 4 words off the machine check vector
@@ -135,8 +154,8 @@ int				count;
 #if 0 /* restore original settings */
 		pci_write_config_byte(0,0,0,ERRENR1, errenR1 | ERRENR1_60X_BUS_ERR);
 #else /* enable MCP on all errors - paranoia setting */
-		pci_write_config_byte(0,0,0,ERRENR1,0xff);
-		pci_write_config_byte(0,0,0,ERRENR2,0x81);
+		pci_write_config_byte(0,0,0,ERRENR1,ERRENR1_VAL);
+		pci_write_config_byte(0,0,0,ERRENR2,ERRENR2_VAL);
 #endif
 		pci_write_config_dword(0,0,0,PICR1,picr1 | (PICR1_MCP_EN|PICR1_TEA_EN));
 	} else {
