@@ -1569,8 +1569,8 @@ static int yellowfin_rx(struct yellowfin_private *yp)
 					   " of %d, bogus_cnt %d.\n",
 					   pkt_len, data_size, boguscnt);
 #endif
-			/* Check if the packet is long enough to just pass up the skbuff
-			   without copying to a properly sized skbuff. */
+			/* Check if the packet is long enough to just pass up the mbuf
+			   without copying to a properly sized mbuf. */
 			if (pkt_len > rx_copybreak) {
 				m = yp->rx_mbuf[entry];
 				yp->rx_mbuf[entry] = NULL;
