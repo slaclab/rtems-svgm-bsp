@@ -52,16 +52,6 @@ BSP_exceptionHandler(BSP_Exception_frame* excPtr);
 
 /* install an exception handler to the current task context */
 BSP_ExceptionExtension
-BSP_exceptionHandlerInstall(BSP_ExceptionExtension e)
-{
-volatile BSP_exceptionExtension	test;
-	if ( RTEMS_SUCCESSFUL != rtems_task_variable_get(RTEMS_SELF, &BSP_exceptionExtension, &test) ) {
-		/* not yet added */
-		rtems_task_variable_add(RTEMS_SELF, &BSP_exceptionExtension, 0);
-	}
-	test = BSP_exceptionExtension;
-	BSP_exceptionExtension = e;
-	return test;
-}
+BSP_exceptionHandlerInstall(BSP_ExceptionExtension e);
 
 #endif

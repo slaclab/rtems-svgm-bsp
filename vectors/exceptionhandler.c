@@ -29,10 +29,10 @@ static volatile BSP_ExceptionExtension	BSP_exceptionExtension = 0;
 BSP_ExceptionExtension
 BSP_exceptionHandlerInstall(BSP_ExceptionExtension e)
 {
-volatile BSP_exceptionExtension	test;
-	if ( RTEMS_SUCCESSFUL != rtems_task_variable_get(RTEMS_SELF, &BSP_exceptionExtension, &test) ) {
+volatile BSP_ExceptionExtension	test;
+	if ( RTEMS_SUCCESSFUL != rtems_task_variable_get(RTEMS_SELF, (void*)&BSP_exceptionExtension, (void**)&test) ) {
 		/* not yet added */
-		rtems_task_variable_add(RTEMS_SELF, &BSP_exceptionExtension, 0);
+		rtems_task_variable_add(RTEMS_SELF, (void*)&BSP_exceptionExtension, 0);
 	}
 	test = BSP_exceptionExtension;
 	BSP_exceptionExtension = e;
@@ -65,7 +65,7 @@ int						quiet=0;
  */
 		    RTEMS_SUCCESSFUL==rtems_task_get_note(id, BSP_EXCEPTION_NOTEPAD, &note)
 #else
-			RTEMS_SUCCESSFUL==rtems_task_variable_get(id, &BSP_exceptionExtension, &note)
+			RTEMS_SUCCESSFUL==rtems_task_variable_get(id, (void*)&BSP_exceptionExtension, (void**)&note)
 #endif
 			) {
 			ext = (BSP_ExceptionExtension)note;
