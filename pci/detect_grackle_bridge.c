@@ -44,8 +44,6 @@
 extern pci_config_access_functions pci_direct_functions;
 extern pci_config_access_functions pci_indirect_functions;
 
-#define HID0_MCP_ENABLE			0x80000000
-
 SPR_RW(HID0)
 
 /* clear all error flags adhering to the algorithm
@@ -129,7 +127,7 @@ int				count;
 #endif
 		pci_write_config_dword(0,0,0,PICR1,picr1 | PICR1_MCP_EN);
 		/* enable MCP interrupt */
-		_write_HID0(_read_HID0() | HID0_MCP_ENABLE);
+		_write_HID0(_read_HID0() | HID0_EMCP);
 	} else {
 		if (!quiet && enableMCP) {
 			printk("leaving MCP interrupt disabled\n");
@@ -145,7 +143,7 @@ void detect_host_bridge()
   /* Disable MCP interrupts at CPU level; scanning the PCI configuration space
    * will result in master-aborts.
    */
-  _write_HID0(_read_HID0() & ~ HID0_MCP_ENABLE);
+  _write_HID0(_read_HID0() & ~ HID0_EMCP);
 
   /* setup the correct address configuration */
   BSP_pci_configuration.pci_config_addr = (void*)_GRACKLE_PCI_CONFIG_ADDR;
