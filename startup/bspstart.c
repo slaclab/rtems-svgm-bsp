@@ -56,6 +56,8 @@
 #define  BAT_VS 2
 #define  BAT_VP 1
 
+/* Reminder: useful setdbat0 code skeleton can be found at the bottom */
+
 /* L2CR bits */
 #define L2CR_L2E		(1<<31)			/* enable */
 #define L2CR_L2PE		(1<<30)			/* parity enable */
@@ -74,13 +76,11 @@
 #define L2CR_L2IP		(1<<0)			/* invalidate in progress */
 
 
-extern void _return_to_ppcbug();
 extern unsigned long __rtems_end;
-extern unsigned long _end;
-extern void L1_caches_enables();
+extern void		L1_caches_enables();
 extern unsigned get_L2CR();
 extern unsigned set_L2CR(unsigned);
-extern void bsp_cleanup(void);
+extern void		bsp_cleanup(void);
 
 typedef struct CmdLineRec_ {
 		unsigned long	size;
@@ -89,14 +89,14 @@ typedef struct CmdLineRec_ {
 
 
 /*
- * Vital Board data Start using DATA RESIDUAL
+ * Vital Board data obtained from VGM board registers
  */
 /*
- * Total memory using RESIDUAL DATA
+ * Total memory
  */
 unsigned int BSP_mem_size;
 /*
- * PCI Bus Frequency
+ * CPU/PPC Bus Frequency
  */
 unsigned int BSP_bus_frequency;
 /*
@@ -107,12 +107,14 @@ unsigned int BSP_processor_frequency;
  * Time base divisior (how many tick for 1 second).
  */
 unsigned int BSP_time_base_divisor;
+
 /*
  * system init stack and soft ir stack size
  */
 #define INIT_STACK_SIZE 0x1000
 #define INTR_STACK_SIZE CONFIGURE_INTERRUPT_STACK_MEMORY
 
+/* calculate the heap start */
 static unsigned long
 heapStart(void)
 {
@@ -293,8 +295,6 @@ CmdLine future_heap=(CmdLine)heapStart();
 	future_heap->size=i;
 }
 
-#define BPNT 0xffd4
-#undef  BPNT
 
 /*
  *  bsp_start
@@ -306,22 +306,19 @@ int _BSP_vme_bridge_irq=-1;
 
 void bsp_start( void )
 {
-#ifdef BPNT
-  int bpval = *(int*)BPNT;
-#endif
-  unsigned char *stack;
-  unsigned long *r1sp;
-  unsigned l2cr;
-  register unsigned char* intrStack;
-  register unsigned int intrNestingLevel = 0;
-  unsigned char *work_space_start;
-  ppc_cpu_id_t myCpu;
-  ppc_cpu_revision_t myCpuRevision;
-  unsigned char reg;
-  const unsigned char *chpt;
-  Triv121PgTbl	pt;
-  unsigned long	ldPtSize;
-  unsigned long tmp;
+  unsigned char				*stack;
+  unsigned long				*r1sp;
+  unsigned					l2cr;
+  register unsigned char*	intrStack;
+  register unsigned int		intrNestingLevel = 0;
+  unsigned char				*work_space_start;
+  ppc_cpu_id_t				myCpu;
+  ppc_cpu_revision_t		myCpuRevision;
+  unsigned char				reg;
+  const unsigned char		*chpt;
+  Triv121PgTbl				pt;
+  unsigned long				ldPtSize;
+  unsigned long				tmp;		/* scratch var */
 
   /*
    * Get CPU identification dynamically. Note that the get_ppc_cpu_type() function
@@ -332,6 +329,9 @@ void bsp_start( void )
 
   /*
    * Access to board registers and PCI devices.
+   *
+   * Luckily, SMON configures PCI devices and maps their
+   * memory areas starting at 0xf0000000 (PCI addr)
    */
   setdbat(1, 0xf0000000, 0xf0000000, 0x10000000, IO_PAGE);
 
@@ -341,6 +341,7 @@ void bsp_start( void )
    * relevant CPU type so that the reason why there is no use of myCpu...
    */
   L1_caches_enables();
+
   /*
    * Enable L2 Cache. Note that the set_L2CR(L2CR) codes checks for
    * relevant CPU type (mpc750)...
@@ -383,7 +384,7 @@ void bsp_start( void )
    */
   stack = ((unsigned char*) &__rtems_end) + INIT_STACK_SIZE - CPU_MINIMUM_STACK_FRAME_SIZE;
 
- /* tag the bottom (T. Straumann 6/36/2001 <strauman@slac.stanford.edu>) */
+  /* tag the bottom, so a stack trace utility may know when to stop */
   *((unsigned32 *)stack) = 0;
 
   /* fill stack with pattern for debugging */
@@ -401,39 +402,27 @@ void bsp_start( void )
    */
   intrStack = ((unsigned char*) &__rtems_end) + INIT_STACK_SIZE + INTR_STACK_SIZE - CPU_MINIMUM_STACK_FRAME_SIZE;
 
- /* tag the bottom (T. Straumann 6/36/2001 <strauman@slac.stanford.edu>) */
+  /* tag the bottom of the interrupt stack as well */
   *((unsigned32 *)intrStack) = 0;
   /* fill interrupt stack with pattern for debugging */
   r1sp=(unsigned long*)intrStack;
   while (--r1sp >= (unsigned long*)( intrStack - (INTR_STACK_SIZE - 8)))
 	  *r1sp=0xeeeeeeee;
 
-  asm volatile ("mtspr	273, %0" : "=r" (intrStack) : "0" (intrStack));
-  asm volatile ("mtspr	272, %0" : "=r" (intrNestingLevel) : "0" (intrNestingLevel));
+  asm volatile ("mtspr	%2, %0"
+				: "=r" (intrStack)
+				: "0" (intrStack), "i"(SPRG1)
+			   );
+  asm volatile ("mtspr	%2, %0"
+				: "=r" (intrNestingLevel)
+				: "0" (intrNestingLevel), "i"(SPRG0)
+			   );
   /*
    * Initialize default raw exception hanlders. See vectors/vectors_init.c
    */
   initialize_exceptions();
-#ifdef BPNT
-  BSPsetDABR(BPNT, 0x6);
-#endif
 
-#if 0
-  /*
-   * Init MMU block address translation to enable hardware
-   * access
-   */
-  /*
-   * PC legacy IO space used for inb/outb and all PC
-   * compatible hardware
-   */
-  setdbat(3, 0x80000000, 0x80000000, 0x10000000, IO_PAGE);
-  /*
-   * PCI devices memory area. Needed to access OPENPIC features
-   * provided by the RAVEN
-   */
-#endif
-
+  /* initialize the polled console; only now, we can start printing messages */
   select_console(CONSOLE_SERIAL);
 
   if (!(chpt=BSP_boardType())) {
@@ -442,6 +431,7 @@ void bsp_start( void )
 
   printk("-----------------------------------------\n");
   printk("Welcome to %s on %s\n", _RTEMS_version, chpt);
+  printk("SSRL Release $Name$ / $Date$\n");
   printk("-----------------------------------------\n");
 #ifdef SHOW_MORE_INIT_SETTINGS  
   printk("Initial system stack at 0x%08x\n",stack);
@@ -460,74 +450,48 @@ void bsp_start( void )
    */
   InitializePCI();
 
-#ifdef TEST_RAW_EXCEPTION_CODE  
-  printk("Testing exception handling Part 1\n");
-  /*
-   * Cause a software exception
-   */
-  __asm__ __volatile ("sc");
-  /*
-   * Check we can still catch exceptions and returned coorectly.
-   */
-  printk("Testing exception handling Part 2\n");
-  __asm__ __volatile ("sc");
-#endif  
-
-#undef DEBUG_PROTECT_TEXT
-/* The idea here is to put text and readonly data
- * into a write-protected area to catch bugs.
- * However, since we have no pagetables (only BATs),
- * we must use two rather large chunks of e.g.
- * 16M+16M.
- * BAT 0 already maps everything RW which is fine
- * until the vectors are installed. Afterwards,
- * we will restrict access to the first chunk
- * by setting up another BAT (3 is still unused)
- * 
- * NOTE: enabling this requires changing the
- *       linker script:
- *       - bump up the code size to 32M
- *       - origin the data section to 16M
- *       Be warned that this results in a huge
- *       image which takes a while to download...
- */
-#ifdef DEBUG_PROTECT_TEXT
-  BSP_mem_size 				= 0x2000000;		/* 16M+16M */
-#else
-  /* read memory info register */
+  /* read board info registers */
   reg = *SYN_VGM_REG_INFO_MEMORY;
   BSP_mem_size 				= 
 		SYN_VGM_REG_INFO_MEMORY_BANKS(reg) * 	/* number of banks */
 		SYN_VGM_REG_INFO_MEMORY_BANK_SIZE(reg); /* bank size */
-#endif
+
+  reg = *SYN_VGM_REG_STAT_BOARD;
+  switch (reg & SYN_VGM_REG_STAT_CPU_BUS_SPEED_MSK) {
+		  default:
+		  case SYN_VGM_REG_STAT_CPU_BUS_SPEED_66:
+				BSP_bus_frequency = 66666667; break;
+		  case SYN_VGM_REG_STAT_CPU_BUS_SPEED_83:
+				BSP_bus_frequency = 83333333; break;
+		  case SYN_VGM_REG_STAT_CPU_BUS_SPEED_100:
+				BSP_bus_frequency = 100000000; break;
+  } 
+  BSP_processor_frequency	= 366000000; /* TODO */
+#warning Need to implement CPU speed timing
+  BSP_time_base_divisor		= 4000; /* 750 and 7400 clock the TB / DECR at 1/4 of the CPU speed */
+  BSPBaseBaud				= 9600*156; /* TODO, found by experiment */
+  
+
+#define PGTBL
+#ifdef PGTBL
+
   /* Allocate a page table large enough to map
    * the entire physical memory. We put the page
    * table at the top of the physical memory.
    */
+
   /* get minimal size (log base 2) of PT for
    * this board's memory
    */
-#define PGTBL
-#undef PGTBL_VME
-#ifdef PGTBL
-
-#ifdef PGTBL_VME
-  ldPtSize = triv121PgTblLdMinSize(0x02000000)+1;
-#else
   ldPtSize = triv121PgTblLdMinSize(BSP_mem_size);
-#endif
-  ldPtSize++; /* double this amount */
+  ldPtSize++; /* double this amount -- then why? */
+
+  /* allocate the page table at the top of the physical
+   * memory
+   */
   if ( (pt = triv121PgTblInit(BSP_mem_size - (1<<ldPtSize), ldPtSize)) ) {
-#ifdef PGTBL_VME
-	tmp = triv121PgTblMap(
-						pt,
-						TRIV121_121_VSID,
-						0x90000000,
-						0x02000000 >> PG_SHIFT,
-						TRIV121_ATTR_IO_PAGE, /* WIMG */
-						TRIV121_PP_RW_PAGE);
-#else
 	extern unsigned long __DATA_START__, _etext;
+
 	/* map text and RO data read-only */
 	tmp = triv121PgTblMap(
 						pt,
@@ -555,54 +519,16 @@ void bsp_start( void )
 			pt = 0;
 		}
 	}
-#endif
   } else {
 	printk("WARNING: unable to allocate page table, keeping DBAT0\n");
   }
   if (pt) {
-  	unsigned long tsill;
-#warning TSILL
-	/* reduce available memory by size of the page table */
+	/* SUCCESS; reduce available memory by size of the page table */
 	BSP_mem_size -= (1<<ldPtSize);
-		if (0x0c0c!=(tsill=triv121IsRangeMapped(0,BSP_mem_size))) {
-			printk("Mapping failure 0 at 0x%08x\n",tsill);
-  		}
-}
-  /* switch the text/ro sements to RO only after
-   * initializing the interrupts because the irq_mng
-   * installs some code...
-   */
-  if (pt) {
-		/* activate the page table; it is still masked by the
-		 * DBAT0, however
-		 */
-		triv121PgTblActivate(pt);
-#ifdef  SHOW_MORE_INIT_SETTINGS
-		printk("Page table setup finished; going to deactivate DBAT0...\n");
-#endif
-	}
+  }
 
-{
-unsigned long tsill;
-		if (0x0c0c!=(tsill=triv121IsRangeMapped(0,BSP_mem_size))) {
-			printk("Mapping failure A at 0x%08x\n",tsill);
-  		}
-}
 #endif
-  reg = *SYN_VGM_REG_STAT_BOARD;
-  switch (reg & SYN_VGM_REG_STAT_CPU_BUS_SPEED_MSK) {
-		  default:
-		  case SYN_VGM_REG_STAT_CPU_BUS_SPEED_66:
-				BSP_bus_frequency = 66666667; break;
-		  case SYN_VGM_REG_STAT_CPU_BUS_SPEED_83:
-				BSP_bus_frequency = 83333333; break;
-		  case SYN_VGM_REG_STAT_CPU_BUS_SPEED_100:
-				BSP_bus_frequency = 100000000; break;
-  } 
-  BSP_processor_frequency	= 366000000; /* TODO */
-  BSP_time_base_divisor		= 4000; /* 750 and 7400 clock the TB / DECR at 1/4 of the CPU speed */
-  BSPBaseBaud				= 9600*156; /* TODO, found by experiment */
-  
+
   /*
    * Set up our hooks
    * Make sure libc_init is done before drivers initialized so that
@@ -617,9 +543,6 @@ unsigned long tsill;
   Cpu_table.clicks_per_usec 	 = BSP_bus_frequency/(BSP_time_base_divisor * 1000);
   Cpu_table.exceptions_in_RAM 	 = TRUE;
 
-#ifdef SHOW_MORE_INIT_SETTINGS
-/*  printk("BSP_Configuration.work_space_size = %x\n", BSP_Configuration.work_space_size); */
-#endif  
   work_space_start = 
     (unsigned char *)BSP_mem_size - BSP_Configuration.work_space_size;
 
@@ -629,14 +552,7 @@ unsigned long tsill;
   }
 
   BSP_Configuration.work_space_start = work_space_start;
-#ifdef PGTBL
-{
-unsigned long tsill;
-		if (0x0c0c!=(tsill=triv121IsRangeMapped(0,BSP_mem_size))) {
-			printk("Mapping failure B at 0x%08x\n",tsill);
-  		}
-}
-#endif
+
   /*
    * Initalize RTEMS IRQ system (including the openPIC)
    */ 
@@ -644,29 +560,29 @@ unsigned long tsill;
   BSP_rtems_irq_mng_init(0);
 
 #ifdef PGTBL
-  if (pt) { extern void MMUoff(), MMUon();
-#warning TSILL
-		unsigned long tsill;
-		/* switch of the DBAT0 mapping */
-		if (0x0c0c!=(tsill=triv121IsRangeMapped(0,BSP_mem_size))) {
-			printk("Mapping failure C at 0x%08x\n",tsill);
-  		}
-		MMUoff();
-		__asm__ __volatile__(
-			"sync; isync\n"
+  if (pt) {
+	/* switch the text/ro sements to RO only after
+	 * initializing the interrupts because the irq_mng
+	 * installs some code...
+	 *
+	 * activate the page table; it is still masked by the
+	 * DBAT0, however
+	 */
+	triv121PgTblActivate(pt);
+
+#ifdef  SHOW_MORE_INIT_SETTINGS
+	printk("Page table setup finished; going to deactivate DBAT0...\n");
+#endif
+	__asm__ __volatile__(
 			"mfspr %%r0, %0\n"
 			"andc  %%r0, %%r0, %1\n"
+			"sync;\n"
 			"mtspr %0, %%r0\n"
 			"sync\n"
 			::"i"(DBAT0U),"r"(BAT_VS | BAT_VP)
 			:"r0"
-		);
-		MMUon();
-		if (0x0c0c!=(tsill=triv121IsRangeMapped(0,BSP_mem_size))) {
-			printk("Mapping failure D at 0x%08x\n",tsill);
-  		}
-		__asm__ __volatile__("mfsdr1 %0":"=r"(tsill));
-		printk("SDR1 is 0x%08x\n",tsill);
+	);
+	/* At this point, DBAT0 is available for other use... */
   }
 #endif
 
@@ -683,13 +599,17 @@ unsigned long tsill;
    */
   BSP_vme_config();
 
-#ifdef DEBUG_PROTECT_TEXT
-  /* restrict the dbats to writing to the second 16M chunk of memory only */
-  printk("protecting 1st 16M from write access\n");
+}
+
+/* Keep this code around in case we want to provide a useful
+ * implementation some day...
+ */
+#if 0
   /* setdbat() doesn't allow to change bat0, we have to do it directly :-(
    * setdbat(0, 0x01000000, 0x01000000, 0x01000000, _PAGE_RW);
    */
-  {
+setdbat0()
+{
 	unsigned long dbat0l,dbat0h;
 	dbat0l = 0x01000000 | 2;
 /*           ^ phys[0:14] ^ RW access [30:31], RO is 1 */
@@ -708,14 +628,5 @@ unsigned long tsill;
 			"sync; isync\n"
 			::"r"(dbat0l),"r"(dbat0h),"i"(DBAT0L),"i"(DBAT0U)
 			:"r0","r3","r4");
-  }
-  /* now make the 1st 16M read-only */
-  setdbat(3, 0x00000000, 0x00000000, 0x01000000, 0);
-#endif
-#ifdef SHOW_MORE_INIT_SETTINGS
-#ifdef BPNT
-  printk("*BPNT is 0x%08x\n",bpval);
-#endif
-  /* printk("Exit from bspstart 0x%08x\n",*(unsigned long*)(0xffe4)); */
-#endif  
 }
+#endif
