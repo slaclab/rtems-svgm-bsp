@@ -31,7 +31,7 @@
 #include <bsp/irq.h>
 #include <libcpu/bat.h>
 #include <bsp/vectors.h>
-#include <libchip/vmeUniverse.h>
+#include <bsp/VME.h>
 
 extern void _return_to_ppcbug();
 extern unsigned long __rtems_end;
