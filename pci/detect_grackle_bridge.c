@@ -21,7 +21,8 @@
 /* this can also be used on the return value of
  * BSP_clear_hostbridge_errors()
  */
-#define ERR_STATUS_GRCKL_OK(s) (0x0080==(s))
+#define PCI_STATUS_FAST_BTB		0x80	/* Grackle is fast back to back capable as a target */
+#define PCI_STATUS_GRCKL_OK(s) (PCI_STATUS_FAST_BTB==(s))
 
 #define PICR1				0xa8	/* LONG register */
 #define PICR1_MCP_EN			(1<<11)
@@ -115,7 +116,7 @@ int				count;
 		__asm__ __volatile__("sync");
 		rtems_bsp_delay(2);
 		__asm__ __volatile__("sync");
-	} while ( ! ERR_STATUS_GRCKL_OK(pcistat) && count-- );
+	} while ( ! PCI_STATUS_GRCKL_OK(pcistat) && count-- );
 
 	/* we also read 4 words off the machine check vector
 	 * location to make sure the Grackle has seen
@@ -142,12 +143,12 @@ int				count;
 
 	status = (errdr2<<24) | (errdr1<<16) | pcistat;
 
-	if ( !ERR_STATUS_GRCKL_OK(rval) && !quiet) {
+	if ( !PCI_STATUS_GRCKL_OK(rval) && !quiet) {
 		printk("Cleared Grackle errors: pci_stat was 0x%04x errdr1 0x%02x errdr2 0x%02x\n",
 					pcistat_orig, errdr1, errdr2);
   	}
 
-	if ( ERR_STATUS_GRCKL_OK(status) && enableMCP) {
+	if ( PCI_STATUS_GRCKL_OK(status) && enableMCP) {
 		/* re-enable error/MCP generation */
 		if (!quiet)
 			printk("Enabling MCP and TEA generation on hostbridge errors\n");
@@ -163,7 +164,7 @@ int				count;
 			printk("leaving MCP and TEA interrupts disabled\n");
 		}
 	}
-	return rval;
+	return rval & ~PCI_STATUS_FAST_BTB;
 }
 
 void detect_host_bridge()
