@@ -6,12 +6,12 @@ AUTOMAKE_OPTIONS = foreign 1.4
 
 VPATH = @srcdir@:@srcdir@/../../shared/pci
 
-C_FILES = pci.c detect_grackle_bridge.c
+C_FILES = pci.c detect_grackle_bridge.c pcicache.c
 C_O_FILES = $(C_FILES:%.c=$(ARCH)/%.o)
 
 H_FILES = ../../shared/pci/pci.h
 
-EXTRA_DIST = detect_grackle_bridge.c
+EXTRA_DIST = detect_grackle_bridge.c pcicache.c
 
 OBJS = $(C_O_FILES)
 
