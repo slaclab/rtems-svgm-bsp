@@ -20,6 +20,7 @@
 
 #include <string.h>
 
+#include <bsp.h>
 #include <rtems/libio.h>
 #include <rtems/libcsupport.h>
 #include <bsp/consoleIo.h>
@@ -28,10 +29,9 @@
 #include <bsp/pci.h>
 #include <bsp/openpic.h>
 #include <bsp/irq.h>
-#include <bsp.h>
 #include <libcpu/bat.h>
 #include <bsp/vectors.h>
-
+#include <libchip/vmeUniverse.h>
 
 extern void _return_to_ppcbug();
 extern unsigned long __rtems_end;
@@ -88,7 +88,7 @@ void
 BSPsetDABR(void *addr, int flags)
 {
 	printk("BSP: setting breakpoint at 0x%08x\n",addr);
-	__asm__ __volatile__("sync; mtspr 1013, %0; isync"::"r"((((long)addr)&~7) | flags & 7));
+	__asm__ __volatile__("sync; mtspr 1013, %0; isync"::"r"((((long)addr)&~7) | (flags & 7)));
 }
 
 /*
@@ -177,9 +177,10 @@ volatile unsigned char *ledreg=(volatile unsigned char*)0xffeffe80;
  *  This routine does the bulk of the system initialization.
  */
 
+int _BSP_vme_bridge_irq=-1;
+
 void bsp_start( void )
 {
-  int err;
 #ifdef BPNT
   int bpval = *(int*)BPNT;
 #endif
@@ -205,7 +206,6 @@ void bsp_start( void )
   setdbat(1, 0xf0000000, 0xf0000000, 0x10000000, IO_PAGE);
 
 
-#ifdef TSILLBLAH
   /*
    * enables L1 Cache. Note that the L1_caches_enables() codes checks for
    * relevant CPU type so that the reason why there is no use of myCpu...
@@ -221,7 +221,7 @@ void bsp_start( void )
 #endif  
   if ( (! (l2cr & 0x80000000)) && ((int) l2cr == -1))
     set_L2CR(0xb9A14000);
-#endif
+
   /*
    * the initial stack  has already been set to this value in start.S
    * so there is no need to set it in r1 again... It is just for info
@@ -278,21 +278,10 @@ void bsp_start( void )
    * PCI devices memory area. Needed to access OPENPIC features
    * provided by the RAVEN
    */
-  /* T. Straumann: give more PCI address space */
-  setdbat(2, 0xc0000000, 0xc0000000, 0x10000000, IO_PAGE);
 #endif
-   select_console(CONSOLE_LOG);
 
-  /* We check that the keyboard is present and immediately 
-   * select the serial console if not.
-   */
-  err = kbdreset();
-  if (err) select_console(CONSOLE_SERIAL);
+   select_console(CONSOLE_SERIAL);
 
-#ifndef TSILLBLAH
-  printk("WARNING: HACK DISABLED CACHES FOR THIS BSP\n");
-#endif
-  
   printk("-----------------------------------------\n");
   printk("Welcome to %s on %s\n", _RTEMS_version, "SVGM");
   printk("-----------------------------------------\n");
@@ -337,7 +326,7 @@ void bsp_start( void )
 #ifdef DEBUG_PROTECT_TEXT
   BSP_mem_size 				= 0x80000;
 #else
-  BSP_mem_size 				= 0x1000000;  /*TODO */
+  BSP_mem_size 				= 0x2000000;  /*TODO */
 #endif
   BSP_bus_frequency			= 66000000; /* TODO */
   BSP_processor_frequency		= 366000000; /* TODO */
@@ -376,6 +365,65 @@ void bsp_start( void )
    */ 
 
   BSP_rtems_irq_mng_init(0);
+
+  /*
+   * Initialize VME bridge - needs working PCI
+   * and IRQ subsystems...
+   */
+#ifdef SHOW_MORE_INIT_SETTINGS
+  printk("Going to initialize VME bridge (disabling all windows)\n");
+#endif  
+  vmeUniverseInit();
+  vmeUniverseReset();
+
+  /* setup a PCI area to map the VME bus */
+  setdbat(2, _VME_A32_WIN0_ON_PCI, _VME_A32_WIN0_ON_PCI, 0x10000000, IO_PAGE);
+
+  /* map VME address ranges */
+  vmeUniverseMasterPortCfg(
+	0,
+	VME_AM_EXT_SUP_DATA,
+	0x20000000,	/* TODO: make this a configuration option */ 
+	_VME_A32_WIN0_ON_PCI,
+	0x0F000000);
+  vmeUniverseMasterPortCfg(
+	1,
+	VME_AM_STD_SUP_DATA,
+	0x00000000,
+	_VME_A24_ON_PCI,
+	0x00ff0000);
+  vmeUniverseMasterPortCfg(
+	2,
+	VME_AM_SUP_SHORT_IO,
+	0x00000000,
+	_VME_A16_ON_PCI,
+	0x00010000);
+
+#ifdef _VME_DRAM_OFFSET
+  /* map our memory to VME */
+  vmeUniverseSlavePortCfg(
+	0,
+	VME_AM_EXT_SUP_DATA,
+	_VME_DRAM_OFFSET,
+	PCI_DRAM_OFFSET,
+	BSP_mem_size);
+
+  /* make sure the host bridge PCI master is enabled */
+  vmeUniverseWriteReg(
+	vmeUniverseReadReg(UNIV_REGOFF_PCI_CSR) | UNIV_PCI_CSR_BM,
+	UNIV_REGOFF_PCI_CSR);
+#endif
+
+  /* stdio is not yet initialized; the driver will revert to printk */
+  vmeUniverseMasterPortsShow(0);
+  vmeUniverseSlavePortsShow(0);
+
+  /* install the VME insterrupt manager */
+  vmeUniverseInstallIrqMgr(4, 5, 8);
+  if (vmeUniverse0PciIrqLine<0)
+	BSP_panic("Unable to get interrupt line info from PCI config");
+  _BSP_vme_bridge_irq=BSP_PCI_IRQ_LOWEST_OFFSET+vmeUniverse0PciIrqLine;
+
 #ifdef DEBUG_PROTECT_TEXT
   /* restrict the dbats to the second 256k chunk of memory */
   printk("protecting 1st 256k from data access\n");
@@ -404,4 +452,10 @@ void bsp_start( void )
 #endif
   /* printk("Exit from bspstart 0x%08x\n",*(unsigned long*)(0xffe4)); */
 #endif  
+}
+
+void
+rtemsReboot(void)
+{
+	vmeUniverseResetBus();
 }
