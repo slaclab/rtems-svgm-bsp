@@ -224,6 +224,25 @@ void			BSP_vme_config(void);
 Triv121PgTbl	BSP_pgtbl_setup(unsigned int*);
 void			BSP_pgtbl_activate(Triv121PgTbl);
 
+/* bsp_postdriver_hook() opens the console for stdio;
+ * we also want 'special' BREAK processing, so we can
+ * reset the board by sending a BREAK to the console...
+ */
+static void eax(void)
+{
+printk("atexit BSP\n");
+}
+static void		svgmPostdriverHook(void)
+{
+BSP_UartBreakCbRec cb;
+	/* do standard init (open console) */
+	bsp_postdriver_hook();
+	/* stdin should be fd 0 now */
+	cb.handler = (BSP_UartBreakCbProc)rtemsReboot;
+	cb.private = 0;
+	ioctl(0,BIOCSETBREAKCB,&cb);
+}
+
 /*
  *  Function:   bsp_pretasking_hook
  *  Created:    95/03/10
@@ -269,6 +288,7 @@ void bsp_pretasking_hook(void)
 #endif    
     bsp_libc_init((void *) heap_start, heap_size, 0);
 
+	assert(0==atexit(eax));
 	/* put the commandline parameters into the environment */
 	if (buf) {
 			char		*beg,*end;
@@ -676,7 +696,7 @@ void bsp_start( void )
    */
 
   Cpu_table.pretasking_hook 	 = bsp_pretasking_hook;    /* init libc, etc. */
-  Cpu_table.postdriver_hook 	 = bsp_postdriver_hook;
+  Cpu_table.postdriver_hook 	 = svgmPostdriverHook;
   Cpu_table.do_zero_of_workspace = TRUE;
   Cpu_table.interrupt_stack_size = CONFIGURE_INTERRUPT_STACK_MEMORY;
   /* TB is clocked by PPC bus clock / timebase divisor */
