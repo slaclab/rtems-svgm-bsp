@@ -38,7 +38,7 @@ $(PROJECT_INCLUDE)/bsp/residual.h: ../include/residual.h
 	$(INSTALL_DATA) $< $@
 
 
-PREINSTALL_FILES += $(PROJECT_INCLUDE) $(PROJECT_INCLUDE)/bsp \
+PREINSTALL_FILES = $(PROJECT_INCLUDE) $(PROJECT_INCLUDE)/bsp \
     $(PROJECT_INCLUDE)/nvram.h $(PROJECT_INCLUDE)/bsp.h \
     $(PROJECT_INCLUDE)/coverhd.h $(PROJECT_INCLUDE)/bsp/consoleIo.h \
     $(PROJECT_INCLUDE)/bsp/uart.h $(PROJECT_INCLUDE)/bsp/residual.h\

@@ -35,7 +35,8 @@ AM_CPPFLAGS += -D__BOOT__ -DDEBUG -mrelocatable
 AM_CFLAGS += -msoft-float -mstrict-align -fno-builtin -Wall -mmultiple \
     -mstring -O2 -fomit-frame-pointer -ffixed-r13 -mno-sdata
 
-CLEANFILES += bootloader.o
+CLEANFILES = bootloader.o
+DISTCLEANFILES =
 
 #
 # CAUTION :
