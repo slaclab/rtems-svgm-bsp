@@ -88,7 +88,7 @@ preloader:
 	bl	here
 here:	mflr	r0
 	sub	r0,r0,r5
-	cmpwi	r0,4
+	cmpwi	r0,(here-preloader)
 	bne	panic
 	sub	r30,r6,r5	/* save image length */
 
@@ -141,7 +141,7 @@ return_here:
 #endif
 	bl	domove
 	/* OK, now everything should be in place.
-         * we are ready to start...
+     * we are ready to start...
 	 */
 
 	/* setup initial stack for rtems early boot */
@@ -160,26 +160,26 @@ return_here:
 #endif
 	rfi
 
-	/* domove(to, from, nbytes):
-         *
-	 * move a R5 bytes from R4 to R3 and flush
-         * the caches for the destination memory
-         * region. R6 provides the cache line size.
-         */
+    /* domove(to, from, nbytes):
+     *
+     * move a R5 bytes from R4 to R3 and flush
+     * the caches for the destination memory
+     * region. R6 provides the cache line size.
+     */
 domove:
 	addi	r0,r5,3		/* convert to word count */
 	srwi.	r0,r0,2
-	beq	3f		/* nothing to do */
+	beq	3f				/* nothing to do */
 	mtctr	r0
 	la	r8,-4(r4)
 	la	r7,-4(r3)
 1:	lwzu	r0,4(r8)
 	stwu	r0,4(r7)
-	bdnz	1b		/* move data */
+	bdnz	1b			/* move data */
 	/* now, we must flush the destination cache region */
 	cmpwi	r6,0
-	beq	3f		/* nothing to do */
-	add	r7,r3,r5	/* target end pointer */
+	beq	3f				/* nothing to do */
+	add	r7,r3,r5		/* target end pointer */
 	subi	r0,r6,1
 	add	r7,r7,r0
 	andc	r7,r7,r0	/* cache aligned target end pointer */
@@ -189,8 +189,8 @@ domove:
 	icbi	0,r8		/* invalidate corresponding i-cache line */
 	add	r8,r8,r6
 	blt	2b
-	sync			/* make sure data is written back */
-	isync			/* invalidate possibly preloaded instructions */
+	sync				/* make sure data is written back */
+	isync				/* invalidate possibly preloaded instructions */
 3:
 	blr
 panic:
