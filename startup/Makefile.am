@@ -9,7 +9,7 @@ VPATH = @srcdir@:@srcdir@/../console:@srcdir@/../../../shared:@srcdir@/../../sha
 INCLUDES = -I @srcdir@/../synergy
 
 C_FILES = bootcard.c main.c bspstart.c bsppost.c bsplibc.c sbrk.c bspclean.c \
-    gnatinstallhandler.c vmeconfig.c pgtbl_setup.c pgtbl_activate.c build_date.c
+    gnatinstallhandler.c build_date.c pgtbl_setup.c pgtbl_activate.c
 C_O_FILES = $(C_FILES:%.c=$(ARCH)/%.o)
 
 build_date.c::
@@ -45,7 +45,6 @@ TMPINSTALL_FILES += $(PROJECT_RELEASE)/lib/linkcmds
 
 all-local: $(ARCH) $(OBJS) $(TMPINSTALL_FILES)
 
-EXTRA_DIST = linkcmds bspstart.c  pgtbl_activate.c \
-			 vmeconfig.c bootpstuff.c  pgtbl_setup.c
+EXTRA_DIST = linkcmds bspstart.c bootpstuff.c bspclean.c
 
 include $(top_srcdir)/../../../../../../automake/local.am

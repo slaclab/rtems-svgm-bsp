@@ -21,15 +21,14 @@
  *    - adapted shared/irq/irq.h for SVGM (no ISA devices/PIC)
  */
 
-#ifndef LIBBSP_POWERPC_MCP750_IRQ_IRQ_H
-#define LIBBSP_POWERPC_MCP750_IRQ_IRQ_H
+#ifndef LIBBSP_POWERPC_SVGM_IRQ_IRQ_H
+#define LIBBSP_POWERPC_SVGM_IRQ_IRQ_H
 
 
 #define BSP_ASM_IRQ_VECTOR_BASE 0x0
 
 #ifndef ASM
 
-#include <bsp/vmeUniverse.h>
 /*
  * Symbolic IRQ names and related definitions.
  */
@@ -97,16 +96,6 @@ typedef enum {
   BSP_DECREMENTER		=	BSP_PROCESSOR_IRQ_LOWEST_OFFSET
   
 }rtems_irq_symbolic_name;
-
-#define BSP_PCI_VME_BRIDGE_DOES_EOI
-extern int _BSP_vme_bridge_irq;
-/* don't reference vmeUniverse0PciIrqLine directly here - leave it up to
- * bspstart() to set BSP_vme_bridge_irq. That way, we can generate variants
- * of the BSP with / without the universe driver...
- */
-#define BSP_PCI_VME_BRIDGE_IRQ _BSP_vme_bridge_irq
-    
-
 
 /*
  * Type definition for RTEMS managed interrupts

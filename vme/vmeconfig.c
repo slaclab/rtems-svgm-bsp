@@ -37,7 +37,7 @@ __VGM_default_vme_config(void)
   vmeUniverseMasterPortCfg(
 	0,
 	VME_AM_EXT_SUP_DATA,
-	0x20000000,	/* TODO: make this a configuration option */ 
+	_VME_A32_WIN0_ON_VME,
 	_VME_A32_WIN0_ON_PCI,
 	0x0F000000);
   vmeUniverseMasterPortCfg(
@@ -73,7 +73,7 @@ __VGM_default_vme_config(void)
   vmeUniverseSlavePortsShow(0);
 
   /* install the VME insterrupt manager */
-  vmeUniverseInstallIrqMgr(4, 5, 8);
+  vmeUniverseInstallIrqMgr(4, -1, 5, 8);
   if (vmeUniverse0PciIrqLine<0)
 	BSP_panic("Unable to get interrupt line info from PCI config");
   _BSP_vme_bridge_irq=BSP_PCI_IRQ_LOWEST_OFFSET+vmeUniverse0PciIrqLine;

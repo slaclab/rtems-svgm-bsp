@@ -6,7 +6,7 @@ AUTOMAKE_OPTIONS = foreign 1.4
 
 include_HEADERS = bspopts.h
 
-H_FILES = ../include/bsp.h ../include/bspVME.h \
+H_FILES = ../include/bsp.h \
     ../../../shared/include/coverhd.h
 
 $(PROJECT_INCLUDE):
@@ -19,9 +19,6 @@ $(PROJECT_INCLUDE)/%.h: %.h
 	$(INSTALL_DATA) $< $@
 
 $(PROJECT_INCLUDE)/bsp.h: ../include/bsp.h
-	$(INSTALL_DATA) $< $@
-
-$(PROJECT_INCLUDE)/bsp/VME.h: ../include/bspVME.h
 	$(INSTALL_DATA) $< $@
 
 $(PROJECT_INCLUDE)/coverhd.h: ../../../shared/include/coverhd.h
@@ -37,7 +34,7 @@ $(PROJECT_INCLUDE)/bsp/irq.h: ../irq/irq.h
 	$(INSTALL_DATA) $< $@
 
 TMPINSTALL_FILES = $(PROJECT_INCLUDE) $(PROJECT_INCLUDE)/bsp \
-    $(PROJECT_INCLUDE)/bsp.h $(PROJECT_INCLUDE)/bsp/VME.h \
+    $(PROJECT_INCLUDE)/bsp.h \
     $(PROJECT_INCLUDE)/coverhd.h $(PROJECT_INCLUDE)/bsp/consoleIo.h \
     $(PROJECT_INCLUDE)/bsp/uart.h $(PROJECT_INCLUDE)/bsp/irq.h \
     $(include_HEADERS:%=$(PROJECT_INCLUDE)/%)
