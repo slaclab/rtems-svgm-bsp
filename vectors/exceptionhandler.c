@@ -38,6 +38,23 @@ volatile BSP_ExceptionExtension	test;
 	return test;
 }
 
+/* Save a register dump in NETBSD core format to make generating
+ * a core dump easier...
+ */
+struct nbsd_core_regs_ {
+	rtems_unsigned32	gpr[32];
+	rtems_unsigned32	lr;
+	rtems_unsigned32	cr;
+	rtems_unsigned32	xer;
+	rtems_unsigned32	ctr;
+	rtems_unsigned32	pc;
+	rtems_unsigned32	msr;	/* our extension */
+	rtems_unsigned32	dar;	/* our extension */
+	rtems_unsigned32	vec;	/* our extension */
+}  _BSP_Exception_NBSD_Registers;
+
+#define nbsd _BSP_Exception_NBSD_Registers
+
 void
 BSP_exceptionHandler(BSP_Exception_frame* excPtr)
 {
@@ -78,6 +95,48 @@ int						quiet=0;
 			fmt="exception %d\n";
 		}
 	}
+
+	/* save registers in NBSD format for a corefile generator to be picked up */
+    nbsd.vec    =excPtr->_EXC_number;
+	nbsd.pc     =excPtr->EXC_SRR0;
+	nbsd.msr    =excPtr->EXC_SRR1;
+	nbsd.gpr[ 0]=excPtr->GPR0 ;
+	nbsd.gpr[ 1]=excPtr->GPR1 ;
+	nbsd.gpr[ 2]=excPtr->GPR2 ;
+	nbsd.gpr[ 3]=excPtr->GPR3 ;
+	nbsd.gpr[ 4]=excPtr->GPR4 ;
+	nbsd.gpr[ 5]=excPtr->GPR5 ;
+	nbsd.gpr[ 6]=excPtr->GPR6 ;
+	nbsd.gpr[ 7]=excPtr->GPR7 ;
+	nbsd.gpr[ 8]=excPtr->GPR8 ;
+	nbsd.gpr[ 9]=excPtr->GPR9 ;
+	nbsd.gpr[10]=excPtr->GPR10;
+	nbsd.gpr[11]=excPtr->GPR11;
+	nbsd.gpr[12]=excPtr->GPR12;
+	nbsd.gpr[13]=excPtr->GPR13;
+	nbsd.gpr[14]=excPtr->GPR14;
+	nbsd.gpr[15]=excPtr->GPR15;
+	nbsd.gpr[16]=excPtr->GPR16;
+	nbsd.gpr[17]=excPtr->GPR17;
+	nbsd.gpr[18]=excPtr->GPR18;
+	nbsd.gpr[19]=excPtr->GPR19;
+	nbsd.gpr[20]=excPtr->GPR20;
+	nbsd.gpr[21]=excPtr->GPR21;
+	nbsd.gpr[22]=excPtr->GPR22;
+	nbsd.gpr[23]=excPtr->GPR23;
+	nbsd.gpr[24]=excPtr->GPR24;
+	nbsd.gpr[25]=excPtr->GPR25;
+	nbsd.gpr[26]=excPtr->GPR26;
+	nbsd.gpr[27]=excPtr->GPR27;
+	nbsd.gpr[28]=excPtr->GPR28;
+	nbsd.gpr[29]=excPtr->GPR29;
+	nbsd.gpr[30]=excPtr->GPR30;
+	nbsd.gpr[31]=excPtr->GPR31;
+	nbsd.cr     =excPtr->EXC_CR ;
+	nbsd.ctr    =excPtr->EXC_CTR;
+	nbsd.xer    =excPtr->EXC_XER;
+	nbsd.lr     =excPtr->EXC_LR ;
+	nbsd.dar    =excPtr->EXC_DAR;
 	
 	if (ext && ext->lowlevelHook && ext->lowlevelHook(excPtr,ext,0)) {
 		/* they did all the work and want us to do nothing! */
@@ -88,45 +147,46 @@ int						quiet=0;
 		/* message about exception */
 		printk(fmt, excPtr->_EXC_number);
 		/* register dump */
-		printk("\t Next PC or Address of fault = %x, ", excPtr->EXC_SRR0);
+		printk("\t Next PC or Address of fault = %x, ",
+                                   excPtr->EXC_SRR0);
 		printk("Saved MSR = %x\n", excPtr->EXC_SRR1);
-		printk("\t R0  = %08x", excPtr->GPR0);
-		printk(" R1  = %08x", excPtr->GPR1);
-		printk(" R2  = %08x", excPtr->GPR2);
-		printk(" R3  = %08x\n", excPtr->GPR3);
-		printk("\t R4  = %08x", excPtr->GPR4);
-		printk(" R5  = %08x", excPtr->GPR5);
-		printk(" R6  = %08x", excPtr->GPR6);
-		printk(" R7  = %08x\n", excPtr->GPR7);
-		printk("\t R8  = %08x", excPtr->GPR8);
-		printk(" R9  = %08x", excPtr->GPR9);
-		printk(" R10 = %08x", excPtr->GPR10);
-		printk(" R11 = %08x\n", excPtr->GPR11);
-		printk("\t R12 = %08x", excPtr->GPR12);
-		printk(" R13 = %08x", excPtr->GPR13);
-		printk(" R14 = %08x", excPtr->GPR14);
-		printk(" R15 = %08x\n", excPtr->GPR15);
-		printk("\t R16 = %08x", excPtr->GPR16);
-		printk(" R17 = %08x", excPtr->GPR17);
-		printk(" R18 = %08x", excPtr->GPR18);
-		printk(" R19 = %08x\n", excPtr->GPR19);
-		printk("\t R20 = %08x", excPtr->GPR20);
-		printk(" R21 = %08x", excPtr->GPR21);
-		printk(" R22 = %08x", excPtr->GPR22);
-		printk(" R23 = %08x\n", excPtr->GPR23);
-		printk("\t R24 = %08x", excPtr->GPR24);
-		printk(" R25 = %08x", excPtr->GPR25);
-		printk(" R26 = %08x", excPtr->GPR26);
-		printk(" R27 = %08x\n", excPtr->GPR27);
-		printk("\t R28 = %08x", excPtr->GPR28);
-		printk(" R29 = %08x", excPtr->GPR29);
-		printk(" R30 = %08x", excPtr->GPR30);
-		printk(" R31 = %08x\n", excPtr->GPR31);
-		printk("\t CR  = %08x\n", excPtr->EXC_CR);
-		printk("\t CTR = %08x\n", excPtr->EXC_CTR);
-		printk("\t XER = %08x\n", excPtr->EXC_XER);
-		printk("\t LR  = %08x\n", excPtr->EXC_LR);
-		printk("\t DAR = %08x\n", excPtr->EXC_DAR);
+		printk("\t R0  = %08x",    excPtr->GPR0 );
+		printk(" R1  = %08x",      excPtr->GPR1 );
+		printk(" R2  = %08x",      excPtr->GPR2 );
+		printk(" R3  = %08x\n",    excPtr->GPR3 );
+		printk("\t R4  = %08x",    excPtr->GPR4 );
+		printk(" R5  = %08x",      excPtr->GPR5 );
+		printk(" R6  = %08x",      excPtr->GPR6 );
+		printk(" R7  = %08x\n",    excPtr->GPR7 );
+		printk("\t R8  = %08x",    excPtr->GPR8 );
+		printk(" R9  = %08x",      excPtr->GPR9 );
+		printk(" R10 = %08x",      excPtr->GPR10);
+		printk(" R11 = %08x\n",    excPtr->GPR11);
+		printk("\t R12 = %08x",    excPtr->GPR12);
+		printk(" R13 = %08x",      excPtr->GPR13);
+		printk(" R14 = %08x",      excPtr->GPR14);
+		printk(" R15 = %08x\n",    excPtr->GPR15);
+		printk("\t R16 = %08x",    excPtr->GPR16);
+		printk(" R17 = %08x",      excPtr->GPR17);
+		printk(" R18 = %08x",      excPtr->GPR18);
+		printk(" R19 = %08x\n",    excPtr->GPR19);
+		printk("\t R20 = %08x",    excPtr->GPR20);
+		printk(" R21 = %08x",      excPtr->GPR21);
+		printk(" R22 = %08x",      excPtr->GPR22);
+		printk(" R23 = %08x\n",    excPtr->GPR23);
+		printk("\t R24 = %08x",    excPtr->GPR24);
+		printk(" R25 = %08x",      excPtr->GPR25);
+		printk(" R26 = %08x",      excPtr->GPR26);
+		printk(" R27 = %08x\n",    excPtr->GPR27);
+		printk("\t R28 = %08x",    excPtr->GPR28);
+		printk(" R29 = %08x",      excPtr->GPR29);
+		printk(" R30 = %08x",      excPtr->GPR30);
+		printk(" R31 = %08x\n",    excPtr->GPR31);
+		printk("\t CR  = %08x\n",  excPtr->EXC_CR );
+		printk("\t CTR = %08x\n",  excPtr->EXC_CTR);
+		printk("\t XER = %08x\n",  excPtr->EXC_XER);
+		printk("\t LR  = %08x\n",  excPtr->EXC_LR );
+		printk("\t DAR = %08x\n",  excPtr->EXC_DAR);
 	
 		BSP_printStackTrace(excPtr);
 	}
@@ -181,11 +241,7 @@ int						quiet=0;
 	} else if (ASM_DEC_VECTOR == excPtr->_EXC_number) {
 		recoverable = 1;
 	} else if (ASM_SYS_VECTOR == excPtr->_EXC_number) {
-#ifdef TEST_RAW_EXCEPTION_CODE 
-		recoverable = 1;
-#else
-		recoverable = 0;
-#endif
+		recoverable = excPtr->GPR3;
 	}
 
 	/* call them for a second time giving a chance to intercept
@@ -212,8 +268,8 @@ int						quiet=0;
 			printk("unrecoverable exception!!! task %08x suspended\n",id);
 			rtems_task_suspend(id);
 		} else {
-			printk("PANIC, rebooting...\n");
-			rtemsReboot();
+			printk("PANIC, hit the reset key...\n");
+			while (1);
 		}
 	}
 }
