@@ -200,13 +200,15 @@ unsigned long rval;
 void BSP_panic(char *s)
 {
   printk("%s PANIC %s\n",_RTEMS_version, s);
-  __asm__ __volatile ("sc"); 
+  /* flag as non-recoverable */
+  __asm__ __volatile ("li %%r3, %0\n\t sc"::"i"(0):"r3"); 
 }
 
 void _BSP_Fatal_error(unsigned int v)
 {
   printk("%s PANIC ERROR %x\n",_RTEMS_version, v);
-  __asm__ __volatile ("sc"); 
+  /* flag as non-recoverable */
+  __asm__ __volatile ("li %%r3, %0\n\t sc"::"i"(0):"r3"); 
 }
 
 /* flags are: 4 BT (must be MSR[DR])
