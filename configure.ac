@@ -38,6 +38,7 @@ clock/Makefile
 console/Makefile
 include/Makefile
 irq/Makefile
+network/Makefile
 openpic/Makefile
 pci/Makefile
 start/Makefile
