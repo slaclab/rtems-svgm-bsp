@@ -729,7 +729,7 @@ void bsp_start( void )
    * and IRQ subsystems...
    */
 #ifdef SHOW_MORE_INIT_SETTINGS
-  printk("Going to initialize VME bridge (disabling all windows)\n");
+  printk("Going to initialize VME bridge\n");
 #endif  
   /* VME initialization is in a separate file so apps which don't use
    * VME or want a different configuration may link against a customized
