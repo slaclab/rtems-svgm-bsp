@@ -765,6 +765,23 @@ void bsp_start( void )
   Cpu_table.clicks_per_usec 	 = BSP_bus_frequency/(BSP_time_base_divisor * 1000);
   Cpu_table.exceptions_in_RAM 	 = TRUE;
 
+  /* did they pass a workspace size on the commandline ? */
+  {
+  long size=0;
+  CmdLine cmdline = (CmdLine)heapStart();
+  printk("bspstart: **** GOT COMMANDLINE: >>>%s<<<\n",cmdline->buf);
+  if ( (chpt = strstr(cmdline->buf, "WSPC=")) ) {
+    /* strip quotes */
+    for ( chpt+=5; '\''==*chpt; chpt++ )
+      /* nothing else to do */;
+    size = strtol(chpt, 0, 0); 
+  }
+  if ( size ) {
+    printk("Allocating %i bytes of workspace as requested from cmdline\n", size);
+    Configuration.work_space_size = BSP_Configuration.work_space_size = size;
+  }
+  }
+
   work_space_start = 
     (unsigned char *)BSP_mem_size - BSP_Configuration.work_space_size;
 
