@@ -8,7 +8,9 @@ PROVIDE (__stack = 0);
 
 
 MEMORY {
-	VECTORS	: ORIGIN = 0x0 ,  LENGTH = 0x3000
+    BOTTOM  : ORIGIN = 0x00,    LENGTH = 0x80
+    MAILBOX : ORIGIN = 0x80,    LENGTH = 0x80	/* RESERVED */
+	VECTORS	: ORIGIN = 0x100 ,  LENGTH = 0x3000 - 0x100
 	CODE : ORIGIN = 0x3000 , LENGTH = 0x400000 
 }
 SECTIONS
@@ -19,15 +21,19 @@ SECTIONS
  	*(.entry_point_section)
   }
 
+
   .vectors :
   {
+	/* should be the first thing... */
 	*(.svgm_preloader_section)
-	. = ABSOLUTE(0x100) ;
+
    /*
     * This section is used only if NO_DYNAMIC_EXCEPTION_VECTOR_INSTALL
     * is defined in vectors/vectors.S
+    *  *(.vectors)
+    * We actually RELY on dynamic vector installation since we need
+    * this space for the preloader...
     */
-    *(.vectors)
   } > VECTORS
 
 
