@@ -22,19 +22,7 @@ command line. They may be written to a script for
 convenience.
 
     SMon0> load "rtems_app_image" 
-    SMon0> mm r5 0 r6-r5
-    SMon0> msr = msr &~0x30
-    SMon0> go *0
-
-After loading the image, it must be moved to memory
-location 0 (it seems that the 'load' command refuses
-to load something there). Note that 'load' sets
-the registers r5 and r6 to the image starting and
-ending addresses. Next, the MMU is switched off 
-(RTEMS BSP code expects MMU to be off when booting).
-The binary image supplies the entry point address as
-the very first long word, hence the 'go' command
-vectors through the address stored at 0x00000000.
+    SMon0> go r5
 
 Notes on BSP BAT usage
 ----------------------
@@ -56,4 +44,4 @@ DBAT1
 Note that the DBAT1 setup must match the host bridge
 configuration. The BSP does _not_ currently change
 the latter but relies on SMON configuring it. This
-seems to work well for the default configuration
+seems to work well for the default configuration.

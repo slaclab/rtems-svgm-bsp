@@ -1,0 +1,28 @@
+ - 10/16/2001: gather info/settings about board specific
+   base addresses / IO elementary routines to one (BSP dependent)
+   place. This involves fixing the shared BSP.
+
+    hostbridge: identified reading from PCI config space. Note
+               that config space addr/data addresses are pointers
+               in the 'pci' static struct which is statically inited
+               to symbolic constants; all of these things are defined
+               in pci/pci.c
+        [shared:] identify raven using ptr_mem_map->io_base + RAVEN_OFFSET to 
+               probe for the hostbridge. pci structure is initialized
+               to addresses taken from ptr_mem_map (console/polled_io.c,
+               console/consoleIo.h
+
+    openpic:   base address 'OpenPIC' is read from
+               PCI config space in irq/irq_init.c:BSP_rtems_irq_mng_init()
+               (ASSUMPTION: 1:1 PCI<->CPU address space mapping)
+	[shared:]
+		set in pci/pci.c:detect_host_bridge()
+                to PCI_BASE_ADDR_1 (from config space) + PREP_ISA_MEM_BASE.
+
+    console:   console/polled_io.c: redefines 'inb' and 'outb'
+                to eieio(); *(SVGM_SERIAL_BASE + port - COM1)
+               console/uart.c: uread()/uwrite() are modified to access
+                hardcoded SVGM addresses.
+
+    irq/irq.h: must leave a hole in the vector table for ISA IRQS for
+               reusing the shared code.
