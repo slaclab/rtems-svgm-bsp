@@ -8,14 +8,14 @@ VPATH = @srcdir@:
 
 INCLUDES = -I @srcdir@/../synergy
 
-C_FILES = board.c  led.c  reboot.c  watchdog.c
+C_FILES = board.c  led.c  reboot.c  watchdog.c rtc.c
 
 C_O_FILES = $(C_FILES:%.c=$(ARCH)/%.$(OBJEXT))
 
 include_bspdir = $(includedir)/bsp
-include_bsp_HEADERS = bspVGM.h
+include_bsp_HEADERS = bspVGM.h svgmRtc.h
 
-H_FILES = bspVGM.h synergyregs.h
+H_FILES = bspVGM.h synergyregs.h svgmRtc.h
 
 EXTRA_DIST = board.c  led.c  reboot.c  watchdog.c
 
