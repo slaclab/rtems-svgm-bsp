@@ -6,6 +6,8 @@ AUTOMAKE_OPTIONS = foreign 1.4
 
 VPATH = @srcdir@:@srcdir@/../console:@srcdir@/../../../shared:@srcdir@/../../shared/startup
 
+INCLUDES = -I @srcdir@/../synergy
+
 C_FILES = bootcard.c main.c bspstart.c bsppost.c bsplibc.c sbrk.c bspclean.c \
     gnatinstallhandler.c
 C_O_FILES = $(C_FILES:%.c=$(ARCH)/%.o)

@@ -32,6 +32,8 @@
 #include <libcpu/bat.h>
 #include <bsp/vectors.h>
 #include <bsp/VME.h>
+#include <bsp/bspVGM.h>
+#include <synergyregs.h>
 
 extern void _return_to_ppcbug();
 extern unsigned long __rtems_end;
@@ -158,16 +160,6 @@ void save_boot_params(void *r3, void *r4, void* r5, char *additional_boot_option
   /* loader parameters not implemented by this BSP */ 
 }
 
-void
-BSP_setLEDs(unsigned char val)
-{
-int i;
-volatile unsigned char *ledreg=(volatile unsigned char*)0xffeffe80;
-	for (i=0; i<8; i++,ledreg+=8,val>>=1)
-		*ledreg = val&1;	
-	__asm__ __volatile__("eieio");
-}
-
 #define BPNT 0xffd4
 #undef  BPNT
 
@@ -192,6 +184,8 @@ void bsp_start( void )
   unsigned char *work_space_start;
   ppc_cpu_id_t myCpu;
   ppc_cpu_revision_t myCpuRevision;
+  unsigned char reg;
+  const unsigned char *chpt;
 
   /*
    * Get CPU identification dynamically. Note that the get_ppc_cpu_type() function
@@ -280,10 +274,14 @@ void bsp_start( void )
    */
 #endif
 
-   select_console(CONSOLE_SERIAL);
+  select_console(CONSOLE_SERIAL);
+
+  if (!(chpt=BSP_boardType())) {
+		  BSP_panic("Unknown Synergy Board Type");
+  }
 
   printk("-----------------------------------------\n");
-  printk("Welcome to %s on %s\n", _RTEMS_version, "SVGM");
+  printk("Welcome to %s on %s\n", _RTEMS_version, chpt);
   printk("-----------------------------------------\n");
 #ifdef SHOW_MORE_INIT_SETTINGS  
   printk("Initial system stack at %x\n",stack);
@@ -293,15 +291,6 @@ void bsp_start( void )
   printk("-----------------------------------------\n");
 #endif
 
-#ifdef TEST_RETURN_TO_PPCBUG  
-  printk("Hit <Enter> to return to PPCBUG monitor\n");
-  printk("When Finished hit GO. It should print <Back from monitor>\n");
-  debug_getc();
-  _return_to_ppcbug();
-  printk("Back from monitor\n");
-  _return_to_ppcbug();
-#endif /* TEST_RETURN_TO_PPCBUG  */
-
 #ifdef SHOW_MORE_INIT_SETTINGS
   printk("Going to start PCI buses scanning and initialization\n");
 #endif  
@@ -309,6 +298,7 @@ void bsp_start( void )
    * config_addr / config_data addresses here
    */
   InitializePCI();
+
 #ifdef TEST_RAW_EXCEPTION_CODE  
   printk("Testing exception handling Part 1\n");
   /*
@@ -326,13 +316,25 @@ void bsp_start( void )
 #ifdef DEBUG_PROTECT_TEXT
   BSP_mem_size 				= 0x80000;
 #else
-  BSP_mem_size 				= 0x2000000;  /*TODO */
+  /* read memory info register */
+  reg = *SYN_VGM_REG_INFO_MEMORY;
+  BSP_mem_size 				= 
+		SYN_VGM_REG_INFO_MEMORY_BANKS(reg) * 	/* number of banks */
+		SYN_VGM_REG_INFO_MEMORY_BANK_SIZE(reg); /* bank size */
 #endif
-  BSP_bus_frequency			= 66000000; /* TODO */
-  BSP_processor_frequency		= 366000000; /* TODO */
-  BSP_time_base_divisor			= 4000; /* TODO */
+  reg = *SYN_VGM_REG_STAT_BOARD;
+  switch (reg & SYN_VGM_REG_STAT_CPU_BUS_SPEED_MSK) {
+		  default:
+		  case SYN_VGM_REG_STAT_CPU_BUS_SPEED_66:
+				BSP_bus_frequency = 66666667; break;
+		  case SYN_VGM_REG_STAT_CPU_BUS_SPEED_83:
+				BSP_bus_frequency = 83333333; break;
+		  case SYN_VGM_REG_STAT_CPU_BUS_SPEED_100:
+				BSP_bus_frequency = 100000000; break;
+  } 
+  BSP_processor_frequency	= 366000000; /* TODO */
+  BSP_time_base_divisor		= 4000; /* 750 and 7400 clock the TB / DECR at 1/4 of the CPU speed */
   BSPBaseBaud				= 9600*156; /* TODO, found by experiment */
-  /* TODO set openpic timer frequency */
   
   /*
    * Set up our hooks
@@ -344,7 +346,8 @@ void bsp_start( void )
   Cpu_table.postdriver_hook 	 = bsp_postdriver_hook;
   Cpu_table.do_zero_of_workspace = TRUE;
   Cpu_table.interrupt_stack_size = CONFIGURE_INTERRUPT_STACK_MEMORY;
-  Cpu_table.clicks_per_usec 	 = BSP_processor_frequency/(BSP_time_base_divisor * 1000);
+  /* TB is clocked by PPC bus clock / timebase divisor */
+  Cpu_table.clicks_per_usec 	 = BSP_bus_frequency/(BSP_time_base_divisor * 1000);
   Cpu_table.exceptions_in_RAM 	 = TRUE;
 
 #ifdef SHOW_MORE_INIT_SETTINGS
@@ -361,7 +364,7 @@ void bsp_start( void )
   BSP_Configuration.work_space_start = work_space_start;
 
   /*
-   * Initalize RTEMS IRQ system
+   * Initalize RTEMS IRQ system (including the openPIC)
    */ 
 
   BSP_rtems_irq_mng_init(0);
@@ -452,10 +455,4 @@ void bsp_start( void )
 #endif
   /* printk("Exit from bspstart 0x%08x\n",*(unsigned long*)(0xffe4)); */
 #endif  
-}
-
-void
-rtemsReboot(void)
-{
-	vmeUniverseResetBus();
 }
