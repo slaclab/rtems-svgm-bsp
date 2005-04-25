@@ -51,76 +51,25 @@
 #undef __RTEMS_APPLICATION__
 #endif
 
-/* there is no public Workspace_Free() variant :-( */
-#include <rtems/score/wkspace.h>
+/*
+ * system init stack and soft ir stack size
+ */
+#define INIT_STACK_SIZE 0x1000
+#define INTR_STACK_SIZE CONFIGURE_INTERRUPT_STACK_MEMORY
+
+
+#define USE_BOOTP_STUFF
+#undef   SHOW_MORE_INIT_SETTINGS
+
+
+#include "bspstart_common.c"
+#include "cmdline.c"
 
 /* a couple of declarations we have no header for :-( */
 void
 _BSP_pciCacheInit();
 
-rtems_unsigned32
-_bsp_sbrk_init(rtems_unsigned32 heap_start, rtems_unsigned32 *heap_size_p);
-
-
-/* provide access to the command line parameters */
-char *BSP_commandline_string = 0;
-
 BSP_output_char_function_type BSP_output_char = BSP_output_char_via_serial;
-
-#define USE_BOOTP_STUFF
-
-#ifdef  USE_BOOTP_STUFF
-
-#include <rtems/rtems_bsdnet.h>
-
-#include <assert.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-
-/* We'll store here what the application put into its
- * network configuration table.
- */
-static void (*the_apps_bootp)(void)=0;
-static void my_bootp_intercept(void);
-static void fillin_srvrandfile(void);
-
-/* NOTE the '__BSP_wrap_xxx' symbols are defined by
- * the linker script. The idea is to avoid referencing
- * any networking symbols, so a non-networked application
- * will not have to be linked against the networking code.
- *
- * These names are long and ugly to prevent name clashes
- * (global namespace :-()
- *
- * Use the ugly [] construct when declaring the external
- * (linker script defined) variables to prevent the compiler
- * from accessing them in the short data areas (-msdata=eabi)
- * which could result in a linkage error.
- */
-extern char   						*__BSP_wrap_rtems_bsdnet_bootp_boot_file_name[];
-extern char   						*__BSP_wrap_rtems_bsdnet_bootp_cmdline[];
-extern struct in_addr				__BSP_wrap_rtems_bsdnet_bootp_server_address[];
-extern struct rtems_bsdnet_config	__BSP_wrap_rtems_bsdnet_config[];
-void								__BSP_wrap_rtems_bsdnet_do_bootp();
-int									__BSP_wrap_inet_pton();
-int									__BSP_wrap_rtems_bsdnet_loopattach();
-
-#define bootp_file					(__BSP_wrap_rtems_bsdnet_bootp_boot_file_name[0])
-#define bootp_cmdline				(__BSP_wrap_rtems_bsdnet_bootp_cmdline[0])
-#define bootp_srvr					(__BSP_wrap_rtems_bsdnet_bootp_server_address[0])
-#define net_config					(__BSP_wrap_rtems_bsdnet_config[0])
-#define do_bootp					__BSP_wrap_rtems_bsdnet_do_bootp
-#define INET_PTON					__BSP_wrap_inet_pton
-#define loopattach					__BSP_wrap_rtems_bsdnet_loopattach
-
-
-/* parameter table for network setup - separate file because
- * copied from the bootloader
- */
-#include "bootpstuff.c"
-#endif
-
-#undef   SHOW_MORE_INIT_SETTINGS
 
 /* missing bits... */
 
@@ -148,17 +97,10 @@ SPR_RW(HID0)
 SPR_RW(SPRG0)
 SPR_RW(SPRG1)
 
-/* prevent this from ending up in the short data area */
-extern unsigned long __rtems_end[];
 extern void		L1_caches_enables();
 extern unsigned get_L2CR();
 extern unsigned set_L2CR(unsigned);
 extern void		bsp_cleanup(void);
-
-typedef struct CmdLineRec_ {
-		unsigned long	size;
-		char			buf[0];
-} CmdLineRec, *CmdLine;
 
 /*
  * Vital Board data obtained from VGM board registers
@@ -179,23 +121,6 @@ unsigned int BSP_processor_frequency;
  * Time base divisior (how many tick for 1 second).
  */
 unsigned int BSP_time_base_divisor;
-
-/*
- * system init stack and soft ir stack size
- */
-#define INIT_STACK_SIZE 0x1000
-#define INTR_STACK_SIZE CONFIGURE_INTERRUPT_STACK_MEMORY
-
-/* calculate the heap start */
-static unsigned long
-heapStart(void)
-{
-unsigned long rval;
-    rval = ((rtems_unsigned32) __rtems_end) +INIT_STACK_SIZE + INTR_STACK_SIZE;
-    if (rval & (CPU_ALIGNMENT-1))
-        rval = (rval + CPU_ALIGNMENT) & ~(CPU_ALIGNMENT-1);
-	return rval;
-}
 
 void BSP_panic(char *s)
 {
@@ -242,7 +167,6 @@ char *rtems_progname;
  */
  
 void			bsp_postdriver_hook(void);
-void			bsp_libc_init( void *, unsigned32, int );
 
 void			BSP_vme_config(void);
 Triv121PgTbl	BSP_pgtbl_setup(unsigned int*);
@@ -261,288 +185,6 @@ BSP_UartBreakCbRec cb;
 	cb.handler = (BSP_UartBreakCbProc)rtemsReboot;
 	cb.private = 0;
 	ioctl(0,BIOCSETBREAKCB,&cb);
-}
-
-/*
- *  Function:   bsp_pretasking_hook
- *  Created:    95/03/10
- *
- *  Description:
- *      BSP pretasking hook.  Called just before drivers are initialized.
- *      Used to setup libc and install any BSP extensions.
- *
- *  NOTES:
- *      Must not use libc (to do io) from here, since drivers are
- *      not yet initialized.
- *
- */
-
-void bsp_pretasking_hook(void)
-{
-    rtems_unsigned32        heap_start=heapStart();    
-	CmdLine					cmdline=(CmdLine)heap_start;
-    rtems_unsigned32        heap_size,heap_sbrk_spared;
-	char					*buf;
-#ifdef USE_BOOTP_STUFF
-	Parm					p;
-#endif
-
-
-    heap_size = (BSP_mem_size - heap_start) - BSP_Configuration.work_space_size;
-
-	if (cmdline->size > heap_size - (cmdline->buf-(char*)cmdline)) {
-			/* line was truncated by the workspace area; */
-			printk("WARNING: huge commandline overlaps with workspace, truncated\n");
-			cmdline->size=heap_size - (cmdline->buf-(char*)cmdline);
-			cmdline->buf[cmdline->size-1]=0;
-	}
-	/* allocate workspace for the commandline */
-	buf=_Workspace_Allocate(cmdline->size);
-	if (!buf) {
-			printk("WARNING: not enough workspace for commandline, dropping it\n");
-	} else {
-			memcpy(buf,cmdline->buf,cmdline->size);
-	}
-
-	heap_sbrk_spared=_bsp_sbrk_init(heap_start, &heap_size);
-
-#ifdef SHOW_MORE_INIT_SETTINGS
-   	printk(" HEAP start %x  size %x (%x bytes spared for sbrk)\n", heap_start, heap_size, heap_sbrk_spared);
-#endif    
-
-    bsp_libc_init((void *) 0, heap_size, heap_sbrk_spared);
-
-	/* put the commandline parameters into the environment */
-	if (buf) {
-#ifdef USE_BOOTP_STUFF
-		char		*beg,*end;
-		for (beg=buf; beg; beg=end) {
-			/* skip whitespace */
-			while (' '==*beg) {
-				if (!*++beg) {
-					/* end of string reached; bail out */
-					goto done;
-				}
-			}
-			/* simple algorithm to find the end of quoted 'name=quoted'
-			 * substrings. As a side effect, quotes are removed from
-			 * the value.
-			 */
-			if ( (end = strchr(beg,'=')) ) {
-				if ('\'' == *++end) {
-					/* end points to the 1st char after '=' which is a '\'' */
-
-					char *dst = end++;
-
-					/* end points to 1st char after '\'' */
-
-					while ('\'' != *end || '\'' == *++end) {
-						if ( 0 == (*dst++=*end++) ) {
-							/* NO TERMINATING QUOTE FOUND
-							 * (for a properly quoted string we
-							 * should never get here)
-							 */
-							end = 0;
-							dst--;
-							break;
-						}
-					}
-					*dst = 0;
-				} else {
-					/* first space terminates non-quoted strings */
-					if ( (end = strchr(end,' ')) )
-						*(end++)=0;
-				}
-			}
-			/* save special bootloader strings to our private environment
-			 * and pass on the others
-			 */
-			for (p=parmList; p->name; p++) {
-				if (!p->pval) continue;
-				if (0 == strncmp(beg,p->name,strlen(p->name))) {
-					/* found this one; since 'name' contains a '=' strchr will succeed */
-					char *s=strchr(beg,'=')+1;
-
-					/* p->pval might point into the
-					 * network configuration which is invalid
-					 * if we have no networking
-					 */
-					if (&net_config) {
-						*p->pval=malloc(strlen(s)+1);
-						strcpy(*p->pval,s);
-					}
-					break;
-				}
-			}
-			/* unfound name=value pairs are dropped to the floor */
-		}
-#else
-		BSP_commandline_string = strdup(buf);
-#endif
-
-		done:
-			_Workspace_Free(buf);
-	}
-
-#ifdef USE_BOOTP_STUFF
-	/* Check if we are linked with networking support */
-	if (&net_config) {
-		/* seems so - make sure the other symbols are
-		 * defined also...
-		 */
-		assert(&bootp_file && &bootp_srvr && do_bootp && INET_PTON 
-				&& "APP NOT LINKED WITH ALL NECESSARY NETWORKING SYMBOLS");
-		/* now hack into the network configuration... */
-
-		if (boot_use_bootp && 'N'==toupper(*boot_use_bootp)) {
-			/* no bootp */
-			net_config.bootp=0;
-			/* get pointers to the first interface's configuration */
-			if (&net_config) {
-				struct rtems_bsdnet_ifconfig *ifc;
-	
-				for (ifc=net_config.ifconfig;
-					ifc && loopattach==ifc->attach;
-					ifc=ifc->next) {
-					/* should probably make sure it's not a point-to-point
-					 * IF either
-					 */
-				}
-				assert(ifc && "NO INTERFACE CONFIGURATION STRUCTURE FOUND");
-
-				ifc->ip_address = boot_my_ip;
-				boot_my_ip=0;
-				ifc->ip_netmask = boot_my_netmask;
-				boot_my_netmask = 0;
-				/* override the server/filename parameters */
-				fillin_srvrandfile();
-			}
-			
-		} else {
-			the_apps_bootp=net_config.bootp;
-			net_config.bootp=my_bootp_intercept;
-			/* release the strings that will be set up by
-			 * bootp - bootpc relies on them being NULL
-			 */
-			for (p=parmList; p->name; p++) {
-				if (!p->pval) continue;
-				if (p->flags & FLAG_CLRBP) {
-					free(*p->pval); *p->pval=0;
-				}
-			}
-		}
-	}
-#endif
-
-
-#ifdef RTEMS_DEBUG
-    rtems_debug_enable( RTEMS_DEBUG_ALL_MASK );
-#endif
-}
-
-#ifdef USE_BOOTP_STUFF
-static void
-fillin_srvrandfile(void)
-{
-	/* OK - now let's see what we have */
-	if (boot_srvname) {
-		/* Seems we have a different file server */
-		if (INET_PTON(AF_INET,
-					boot_srvname,
-					&bootp_srvr)) {
-		}
-	}
-	if (boot_filename) {
-		/* Ha - they manually changed the file name and the parameters */
-		bootp_file    = boot_filename;
-		/* (dont bother freeing the old one - we don't really know if its malloced */
-		boot_filename = 0;
-	}
-	if (boot_cmdline) {
-		/* comments for boot_filename apply here as well */
-		bootp_cmdline = boot_cmdline;
-	} else {
-		boot_cmdline  = bootp_cmdline;
-	}
-}
-/* if the bootloader loaded a different file
- * than what the BOOTP/DHCP server says we have
- * then we want to forge the respective system
- * variables.
- */
-static void
-my_bootp_intercept(void)
-{
-	/* Do bootp first */
-	if (the_apps_bootp) {
-		the_apps_bootp();
-	} else {
-		do_bootp();
-	}
-	/* override the server/filename parameters */
-	fillin_srvrandfile();
-}
-#endif
-
-void zero_bss()
-{
-  /* prevent these from being accessed in the short data areas */
-  extern unsigned long __bss_start[], __sbss_start[], __sbss_end[];
-  extern unsigned long __sbss2_start[], __sbss2_end[];
-  memset(__sbss_start, 0, ((unsigned) __sbss_end) - ((unsigned)__sbss_start));
-  memset(__sbss2_start, 0, ((unsigned) __sbss2_end) - ((unsigned)__sbss2_start));
-  memset(__bss_start, 0, ((unsigned) __rtems_end) - ((unsigned)__bss_start));
-}
-
-
-/* NOTE: we cannot simply malloc the commandline string;
- * save_boot_params() is called during a very early stage when
- * libc/malloc etc. are not yet initialized!
- *
- * Here's what we do:
- *
- * initial layout setup by the loader (preload.S):
- *
- * 0..RTEMS...__rtems_end | cmdline ....... TOP
- *
- * After the save_boot_params() routine returns, the stack area will be
- * set up (start.S):
- *
- * 0..RTEMS..__rtems_end | INIT_STACK | IRQ_STACK | ..... TOP
- *
- * initialize_executive_early() [called from boot_card()]
- * will initialize the workspace:
- *
- * 0..RTEMS..__rtems_end | INIT_STACK | IRQ_STACK | ...... | workspace | TOP
- *
- * and later calls our pretasking_hook() which ends up initializing
- * libc which in turn initializes the heap
- *
- * 0..RTEMS..__rtems_end | INIT_STACK | IRQ_STACK | heap | workspace | TOP
- *
- * The idea here is to first move the commandline to the future 'heap' area
- * from where it will be picked up by our pretasking_hook().
- * pretasking_hook() then moves it either to INIT_STACK or the workspace
- * area using proper allocation, initializes libc and finally moves
- * the data to the environment / malloced areas...
- */
-
-/* this routine is called early and must be safe with a not properly
- * aligned stack
- */
-void
-save_boot_params(void *r3, void *r4, void* r5, char *cmdline_start, char *cmdline_end)
-{
-int		i=cmdline_end-cmdline_start;
-CmdLine future_heap=(CmdLine)heapStart();
-
- 	/* get the string out of the stack area into the future heap region;
-	 * assume there's enough memory...
-	 */
-	memmove(future_heap->buf,cmdline_start,i);
-	/* make sure there's an end of string marker */
-	future_heap->buf[i++]=0;
-	future_heap->size=i;
 }
 
 
