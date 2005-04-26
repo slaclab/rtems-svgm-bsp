@@ -4,7 +4,7 @@
 
 VPATH = @srcdir@:@srcdir@/../console:@srcdir@/../../shared/startup:@srcdir@/../../../shared
 
-INCLUDES = -I @srcdir@/../synergy
+INCLUDES = -I @srcdir@/../synergy -I @srcdir@/../../shared/startup
 
 C_FILES = bootcard.c main.c bspstart.c bsppost.c bsplibc.c sbrk.c bspclean.c \
     gnatinstallhandler.c build_date.c pgtbl_setup.c pgtbl_activate.c
