@@ -193,11 +193,9 @@ MODULE_PARM(gx_fix, "i");
 /* RTEMS event to restart the transmitter */
 #define RESTART_EVENT	RTEMS_EVENT_2
 /* RTEMS events used by the ISR */
-#define RX_EVENT		RTEMS_EVENT_3
-#define TX_EVENT		RTEMS_EVENT_4
-#define ERR_EVENT		RTEMS_EVENT_5
+#define ISR_EVENT		RTEMS_EVENT_3
 
-#define ALL_EVENTS (KILL_EVENT|RESTART_EVENT|RX_EVENT|TX_EVENT|ERR_EVENT)
+#define ALL_EVENTS (KILL_EVENT|RESTART_EVENT|ISR_EVENT)
 
 /* NOTE: (surprise...)
  * bsdnet redefines malloc to its own rtems_bsdnet_malloc
@@ -460,7 +458,6 @@ struct yellowfin_private {
 	rtems_id	daemonTid;
 	rtems_id	daemonSync;				/* synchronization with the daemon */
 
-	long 		 intr_status;			/* this field is modified by the ISR */
 	unsigned long old_iff;				/* cache the interface flags because
 										 * bsdnet updates them before calling ioctl
 										 */
@@ -491,7 +488,7 @@ static void yellowfin_tx_timeout(struct net_device *dev);
 static void yellowfin_init_ring(struct yellowfin_private *yp);
 static int yellowfin_sendpacket(struct mbuf *skb, struct yellowfin_private *dev);
 static int yellowfin_rx(struct yellowfin_private *dev);
-static void yellowfin_error(struct yellowfin_private *dev);
+static void yellowfin_error(struct yellowfin_private *dev, u16);
 static void yellowfin_stop(struct yellowfin_private *yp);
 static int yellowfin_stop_hw(struct yellowfin_private *yp);
 static void yellowfin_start(struct ifnet * ifp);
@@ -798,24 +795,16 @@ static int yellowfin_irq_is_on(const rtems_irq_connect_data *c)
 static void yellowfin_isr(void)
 {
 struct yellowfin_private *yp = root_yellowfin_dev;
-u16				intr_status = inw(yp->base_addr + IntrClear);
-rtems_event_set	evs=0;
-	/* wakeup the networking task and let it do
-	 * all of the work...
-	 */
-	if ((0x2ee & intr_status) || 0==intr_status) {
-			yp->intr_status = intr_status;
-			evs |= ERR_EVENT;
+u16				intr_status = inw(yp->base_addr + IntrStatus);
+
+	if ( intr_status ) {
+		/* wakeup the networking task and let it do
+	 	 * all of the work...
+	 	 */
+		/* disable interrupts */
+		outw(yp->base_addr + IntrEnb, 0x01ff);
+		rtems_event_send(yp->daemonTid, ISR_EVENT);
 	}
-	if (IntrTxDone & intr_status) {
-			yp->stats.nTxIrqs++;
-			evs |= TX_EVENT;
-	}
-	if ((IntrRxDone|IntrEarlyRx)&intr_status) {
-			yp->stats.nRxIrqs++;
-			evs |= RX_EVENT;
-	}
-	rtems_event_send(yp->daemonTid, evs);
 }
 
 rtems_irq_connect_data yellowfin_irq_info={
@@ -1269,6 +1258,7 @@ int		boguscnt = yellowfin_max_interrupt_work;
 rtems_event_set	events;
 struct mbuf	*m;
 struct ifnet	*ifp=&yp->arpcom.ac_if;
+u16		intr_status;
 
 	if (yellowfin_debug > 1)
 		printk("Yellowfin daemon: starting...\n");
@@ -1305,7 +1295,15 @@ struct ifnet	*ifp=&yp->arpcom.ac_if;
 
 		boguscnt = yellowfin_max_interrupt_work;
 
-		if (events & RX_EVENT) {
+		while ( (intr_status = inw(yp->base_addr + IntrClear)) || events ) {
+		events = 0;
+		
+		if (IntrTxDone & intr_status) {
+			yp->stats.nTxIrqs++;
+		}
+
+		if ( (IntrRxDone | IntrEarlyRx) & intr_status ) {
+			yp->stats.nRxIrqs++;
 			boguscnt-=yellowfin_rx(yp);
 			if ( ! (0x00000400 & inl(ioaddr + RxStatus)) )
 				yp->stats.rxStopped++;
@@ -1432,16 +1430,19 @@ struct ifnet	*ifp=&yp->arpcom.ac_if;
 		}
 
 		/* Log errors and other uncommon events. */
-		if (ERR_EVENT & events) {
+		if ( 0x2ee & intr_status ) {
 			/* Abnormal error summary. */
-			yellowfin_error(yp);
+			yellowfin_error(yp, intr_status);
 		}
 
 		if (boguscnt < 0) {
 			printk("Warning %s%d: Too much work for daemon\n",
 				   ifp->if_name, ifp->if_unit);
 			rtems_task_wake_after(10); /* TODO: chose time */
+			boguscnt = yellowfin_max_interrupt_work;
 		}
+		}
+		outw(yp->base_addr + IntrEnb, 0x81ff);
 	}
 	ifp->if_flags &= ~(IFF_RUNNING|IFF_OACTIVE);
 
@@ -1676,32 +1677,25 @@ static int yellowfin_rx(struct yellowfin_private *yp)
 	return nloops;
 }
 
-static void yellowfin_error(struct yellowfin_private *yp)
+static void yellowfin_error(struct yellowfin_private *yp, u16 intr_status)
 {
 	struct ifnet			*ifp = &yp->arpcom.ac_if;
-	unsigned long			intr_status;
-	rtems_interrupt_level	l;
-
-	/* read and reset the status; because this is written
-	 * by the ISR, we must disable interrupts here
-	 */
-	rtems_interrupt_disable(l);
-		intr_status = yp->intr_status;
-		yp->intr_status=0;
-	rtems_interrupt_enable(l);
 
 	if (intr_status) {
 			printk("%s%d: Something Wicked happened! 0x%04x.\n",
 							ifp->if_name, ifp->if_unit, intr_status);
 			/* Hmmmmm, it's not clear what to do here. */
-			if (intr_status & (IntrTxPCIErr | IntrTxPCIFault))
+			if (intr_status & (IntrTxInvalid | IntrTxPCIErr | IntrTxPCIFault))
 					ifp->if_oerrors++;
-			if (intr_status & (IntrRxPCIErr | IntrRxPCIFault))
+			if (intr_status & (IntrRxInvalid | IntrRxPCIErr | IntrRxPCIFault))
 					ifp->if_ierrors++;
-	} else {
+	}
+#if 0
+	else {
 			printk("%s%d: Hmmm, got interrupt but nothing to do?\n",
 					ifp->if_name, ifp->if_unit);
 	}
+#endif
 }
 
 static void yellowfin_start(struct ifnet * ifp)
