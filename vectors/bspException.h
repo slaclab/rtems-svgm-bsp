@@ -54,4 +54,11 @@ BSP_exceptionHandler(BSP_Exception_frame* excPtr);
 BSP_ExceptionExtension
 BSP_exceptionHandlerInstall(BSP_ExceptionExtension e);
 
+/* (optional) BSP specific routine to clear hostbridge errors and print info
+ * about them. Invoked by the low-level exception handler if a machine
+ * check is detected.
+ */
+void
+BSP_machineCheckClearException(BSP_Exception_frame *, int quiet);
+
 #endif

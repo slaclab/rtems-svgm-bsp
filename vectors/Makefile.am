@@ -4,7 +4,7 @@
 
 VPATH = @srcdir@:@srcdir@/../console:@srcdir@/../../shared/vectors
 
-C_FILES = vectors_init.c exceptionhandler.c
+C_FILES = vectors_init.c exceptionhandler.c machinecheckclear.c
 C_O_FILES = $(C_FILES:%.c=$(ARCH)/%.$(OBJEXT))
 
 H_FILES = ../../shared/vectors/vectors.h bspException.h
