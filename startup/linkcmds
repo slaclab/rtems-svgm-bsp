@@ -260,6 +260,8 @@ _SDA_BASE_ = __SDATA_START__ + 0x8000;
   /* These must appear regardless of  .  */
 }
 
+__BSP_NULLSYMBOL = 0;
+
 /* "Conditional linking" is not supported, unfortunately.
  * This BSP supports getting a network configuration
  * from NVRAM settings. Hence, the startup code must
