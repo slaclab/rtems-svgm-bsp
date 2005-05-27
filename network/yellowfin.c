@@ -802,7 +802,7 @@ u16				intr_status = inw(yp->base_addr + IntrStatus);
 	 	 * all of the work...
 	 	 */
 		/* disable interrupts */
-		outw(yp->base_addr + IntrEnb, 0x01ff);
+		outw(0x0000, yp->base_addr + IntrEnb);
 		rtems_event_send(yp->daemonTid, ISR_EVENT);
 	}
 }
@@ -1442,7 +1442,7 @@ u16		intr_status;
 			boguscnt = yellowfin_max_interrupt_work;
 		}
 		}
-		outw(yp->base_addr + IntrEnb, 0x81ff);
+		outw(0x81ff, yp->base_addr + IntrEnb);
 	}
 	ifp->if_flags &= ~(IFF_RUNNING|IFF_OACTIVE);
 
