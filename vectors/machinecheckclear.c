@@ -13,17 +13,10 @@
 void 
 BSP_machineCheckClearException(BSP_Exception_frame *excPtr, int quiet)
 {
-	if (excPtr->EXC_SRR1 & (SRR1_TEA_EXC)) {
-		if (!quiet)
-			printk(" TEA");
-	}
 	if (excPtr->EXC_SRR1 & (SRR1_MCP_EXC)) {
 		unsigned char c1,c2;
 		unsigned int  l;
 		unsigned long gerr;
-
-		if (!quiet)
-			printk(" MCP\n");
 
 		/* it's MCP; gather info from the host bridge */
 
