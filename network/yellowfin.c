@@ -801,8 +801,8 @@ u16				intr_status = inw(yp->base_addr + IntrStatus);
 		/* wakeup the networking task and let it do
 	 	 * all of the work...
 	 	 */
-		/* disable interrupts */
-		outw(0x0000, yp->base_addr + IntrEnb);
+		/* disable interrupt line but don't mask -- otherwise IntrStatus is not set */
+		outw(0x01ff, yp->base_addr + IntrEnb);
 		rtems_event_send(yp->daemonTid, ISR_EVENT);
 	}
 }
