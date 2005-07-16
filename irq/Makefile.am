@@ -4,7 +4,7 @@
 
 VPATH = @srcdir@:@srcdir@/../../shared/irq
 
-C_FILES = irq_init.c irq.c
+C_FILES = irq_init.c irq.c openpic_i8259_irq.c
 C_O_FILES = $(C_FILES:%.c=$(ARCH)/%.$(OBJEXT))
 
 

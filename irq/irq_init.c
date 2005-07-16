@@ -28,11 +28,6 @@
 #define TRACE_IRQ_INIT  
 #undef  TRACE_IRQ_INIT  
 
-extern unsigned int external_exception_vector_prolog_code_size[];
-extern void external_exception_vector_prolog_code();
-extern unsigned int decrementer_exception_vector_prolog_code_size[];
-extern void decrementer_exception_vector_prolog_code();
-
 /*
  * default on/off function
  */
@@ -78,7 +73,6 @@ static rtems_irq_prio irqPrioTable[BSP_IRQ_NUMBER]={
    */
 void BSP_rtems_irq_mng_init(unsigned cpuId)
 {
-  rtems_raw_except_connect_data vectorDesc;
   int i,bus,dev,fn;
 #ifdef TRACE_IRQ_INIT  
   printk("Going to scan the PCI bus for the IBM MPIC\n");
@@ -142,33 +136,7 @@ void BSP_rtems_irq_mng_init(unsigned cpuId)
        */
       BSP_panic("Unable to initialize RTEMS interrupt Management!!! System locked\n");
     }
-    /* is a normal PCI irq on the SVGM;
-     * irq 0 had been enabled by BSP_rtems_irq_mngt_set()
-     * assuming that an ISA irq controller is hooked up there...
-     */
-    openpic_disable_irq(0);
-  
-  /*
-   * We must connect the raw irq handler for the two
-   * expected interrupt sources : decrementer and external interrupts.
-   */
-    vectorDesc.exceptIndex 	=	ASM_DEC_VECTOR;
-    vectorDesc.hdl.vector	=	ASM_DEC_VECTOR;
-    vectorDesc.hdl.raw_hdl	=	decrementer_exception_vector_prolog_code;
-    vectorDesc.hdl.raw_hdl_size	=	(unsigned) decrementer_exception_vector_prolog_code_size;
-    vectorDesc.on		=	nop_func;
-    vectorDesc.off		=	nop_func;
-    vectorDesc.isOn		=	connected;
-    if (!mpc60x_set_exception (&vectorDesc)) {
-      BSP_panic("Unable to initialize RTEMS decrementer raw exception\n");
-    }
-    vectorDesc.exceptIndex	=	ASM_EXT_VECTOR;
-    vectorDesc.hdl.vector	=	ASM_EXT_VECTOR;
-    vectorDesc.hdl.raw_hdl	=	external_exception_vector_prolog_code;
-    vectorDesc.hdl.raw_hdl_size	=	(unsigned) external_exception_vector_prolog_code_size;
-    if (!mpc60x_set_exception (&vectorDesc)) {
-      BSP_panic("Unable to initialize RTEMS external raw exception\n");
-    }
+
 #ifdef TRACE_IRQ_INIT  
     printk("RTEMS IRQ management is now operationnal\n");
 #endif

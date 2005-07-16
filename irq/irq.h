@@ -274,6 +274,11 @@ int BSP_rtems_irq_mngt_set(rtems_irq_global_settings* config);
 int BSP_rtems_irq_mngt_get(rtems_irq_global_settings**);
   
 extern void BSP_rtems_irq_mng_init(unsigned cpuId);
+
+extern void BSP_enable_irq_at_pic(const rtems_irq_symbolic_name);
+extern void BSP_disable_irq_at_pic(const rtems_irq_symbolic_name);
+int BSP_setup_the_pic(rtems_irq_global_settings* config);
+
 #endif
 
 #endif
