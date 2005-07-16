@@ -25,7 +25,7 @@ SECTIONS
   .vectors :
   {
 	/* should be the first thing... */
-	*(.svgm_preloader_section)
+	*(.ppc_preloader_section)
 
    /*
     * This section is used only if NO_DYNAMIC_EXCEPTION_VECTOR_INSTALL
