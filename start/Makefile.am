@@ -14,7 +14,7 @@ PGM = $(ARCH)/$(SVGM_PREFIX)start.$(OBJEXT)
 S_FILES = preload.S start.S rtems_crti.S
 S_O_FILES = $(S_FILES:%.S=$(ARCH)/%.$(OBJEXT))
 
-EXTRA_DIST = preload.S
+#EXTRA_DIST = preload.S
 
 OBJS = $(ARCH)/preload.$(OBJEXT) $(ARCH)/start.$(OBJEXT)
 
