@@ -2,9 +2,9 @@
 ## $Id$
 ##
 
-VPATH = @srcdir@:
+VPATH = @srcdir@:@srcdir@/../../shared/network
 
-C_FILES = yellowfin.c
+C_FILES = yellowfin.c fixup_net_config.c
 C_O_FILES = $(C_FILES:%.c=$(ARCH)/%.$(OBJEXT))
 
 EXTRA_DIST = yellowfin.c
