@@ -76,7 +76,7 @@ __VGM_default_vme_config(void)
   vmeUniverseInstallIrqMgr(4, -1, 5, 8);
   if (vmeUniverse0PciIrqLine<0)
 	BSP_panic("Unable to get interrupt line info from PCI config");
-  _BSP_vme_bridge_irq=BSP_PCI_IRQ_LOWEST_OFFSET+vmeUniverse0PciIrqLine;
+  _BSP_vme_bridge_irq=vmeUniverse0PciIrqLine;
 
   /* install alternate resetter */
   __BSP_alternate_reset = vmeUniverseResetBus;
