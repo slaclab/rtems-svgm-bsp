@@ -9,7 +9,7 @@ C_O_FILES = $(C_FILES:%.c=$(ARCH)/%.$(OBJEXT))
 
 
 include_bspdir = $(includedir)/bsp
-include_bsp_HEADERS = irq.h
+include_bsp_HEADERS = irq.h ../../shared/irq/bsp_common_irq.h
 
 H_FILES = irq.h
 
@@ -26,10 +26,10 @@ include $(top_srcdir)/../../../../../../automake/lib.am
 $(PROJECT_INCLUDE)/bsp:
 	$(mkinstalldirs) $@
 
-$(PROJECT_INCLUDE)/bsp/irq.h: irq.h
+$(PROJECT_INCLUDE)/bsp/%.h: %.h
 	$(INSTALL_DATA) $< $@
 
-PREINSTALL_FILES = $(PROJECT_INCLUDE)/bsp/irq.h
+PREINSTALL_FILES = $(PROJECT_INCLUDE)/bsp/irq.h $(PROJECT_INCLUDE)/bsp/bsp_common_irq.h
 
 all-local: $(ARCH) $(PREINSTALL_FILES) $(OBJS)
 
