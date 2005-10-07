@@ -39,7 +39,6 @@
 #include <libcpu/cpuIdent.h>
 
 #include <bsp/vectors.h>
-#include <bsp/VME.h>
 #include <bsp/bspVGM.h>
 #include <bsp/bspException.h>
 #include <synergyregs.h>
@@ -154,7 +153,6 @@ char *rtems_progname;
  
 void			bsp_postdriver_hook(void);
 
-void			BSP_vme_config(void);
 Triv121PgTbl	BSP_pgtbl_setup(unsigned int*);
 void			BSP_pgtbl_activate(Triv121PgTbl);
 
@@ -438,17 +436,4 @@ void bsp_start( void )
 #endif
   	BSP_pgtbl_activate(pt);
   }
-
-  /*
-   * Initialize VME bridge - needs working PCI
-   * and IRQ subsystems...
-   */
-#ifdef SHOW_MORE_INIT_SETTINGS
-  printk("Going to initialize VME bridge\n");
-#endif  
-  /* VME initialization is in a separate file so apps which don't use
-   * VME or want a different configuration may link against a customized
-   * routine.
-   */
-  BSP_vme_config();
 }

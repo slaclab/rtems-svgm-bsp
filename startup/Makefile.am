@@ -30,6 +30,6 @@ TMPINSTALL_FILES += $(PROJECT_RELEASE)/lib/linkcmds
 
 all-local: $(ARCH) $(OBJS) $(TMPINSTALL_FILES) 
 
-EXTRA_DIST = linkcmds bspstart.c bootpstuff.c bspclean.c
+EXTRA_DIST = linkcmds bspstart.c bspclean.c
 
 include $(top_srcdir)/../../../../../../automake/local.am
