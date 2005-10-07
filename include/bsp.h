@@ -40,6 +40,9 @@
 #define CONFIGURE_NUMBER_OF_TERMIOS_PORTS 2
 #define CONFIGURE_INTERRUPT_STACK_MEMORY  (16 * 1024)
 
+#define BSP_NVRAM_BOOTPARMS_START	(0xffe9f000)
+#define BSP_NVRAM_BOOTPARMS_END		(0xffe9f4ff)
+
 /* private definitions, not visible to apps */
 #define BSP_UART_IOBASE_COM1	(0xffeffb08)
 #define BSP_UART_IOBASE_COM2	(0xffeffb00)
@@ -50,7 +53,6 @@
 #include <bsp/openpic.h>
 
 #define BSP_PIC_DO_EOI		openpic_eoi(0)
-
 
 #ifndef ASM
 /* drivers should not use these anyway */
