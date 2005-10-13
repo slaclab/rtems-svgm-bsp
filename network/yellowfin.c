@@ -224,8 +224,8 @@ int 		i;
 #endif
 
 /* map pci interrupt to 'name' [the shared PPC irq interface could be better designed] */
-#define	BSP_PCIIRQ2NAME(irq) ((irq)+BSP_PCI_IRQ_LOWEST_OFFSET)
-#define	BSP_NAME2PCIIRQ(name) ((name)-BSP_PCI_IRQ_LOWEST_OFFSET)
+#define	BSP_PCIIRQ2NAME(irq)  (irq)
+#define	BSP_NAME2PCIIRQ(name) (name)
 
 /* Condensed operations for readability. */
 #ifdef TSILL_TODO
