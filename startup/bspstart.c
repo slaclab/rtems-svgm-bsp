@@ -68,6 +68,9 @@
 void
 _BSP_pciCacheInit();
 
+void
+_BSP_pciIRouteFixup();
+
 BSP_output_char_function_type BSP_output_char = BSP_output_char_via_serial;
 
 /* missing bits... */
@@ -324,6 +327,8 @@ void bsp_start( void )
    * config_addr / config_data addresses here
    */
   InitializePCI();
+
+  _BSP_pciIRouteFixup();
 
   /* Install our own exception handler (needs PCI) */
   globalExceptHdl = BSP_exceptionHandler;

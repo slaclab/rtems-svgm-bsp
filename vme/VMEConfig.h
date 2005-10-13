@@ -26,4 +26,15 @@
  */
 #define _VME_DRAM_OFFSET		0xc0000000
 
+/* Tell the interrupt manager that the universe driver
+ * already called openpic_eoi() and that this step hence
+ * must be omitted.
+ */
+#define BSP_PCI_VME_DRIVER_DOES_EOI
+/* don't reference vmeUniverse0PciIrqLine directly here - leave it up to
+ * bspstart() to set BSP_vme_bridge_irq. That way, we can generate variants
+ * of the BSP with / without the universe driver...
+ */
+extern int _BSP_vme_bridge_irq;
+
 #endif

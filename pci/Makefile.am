@@ -4,7 +4,7 @@
 
 VPATH = @srcdir@:@srcdir@/../../shared/pci
 
-C_FILES = pci.c detect_grackle_bridge.c pcifinddevice.c
+C_FILES = pci.c detect_grackle_bridge.c pcifinddevice.c iroutemap.c
 C_O_FILES = $(C_FILES:%.c=$(ARCH)/%.$(OBJEXT))
 
 include_bspdir = $(includedir)/bsp

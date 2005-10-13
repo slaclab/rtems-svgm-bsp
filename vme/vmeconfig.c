@@ -6,6 +6,7 @@
 
 #include <bsp.h>
 #include <bsp/VME.h>
+#include <bsp/vmeUniverse.h>
 #include <bsp/irq.h>
 #include <libcpu/bat.h>
 
@@ -72,8 +73,11 @@ __VGM_default_vme_config(void)
   vmeUniverseMasterPortsShow(0);
   vmeUniverseSlavePortsShow(0);
 
-  /* install the VME insterrupt manager */
-  vmeUniverseInstallIrqMgr(4, -1, 5, 8);
+  /* install the VME insterrupt manager
+   * using dedicated/unshared wires between universe & PIC;
+   * these cannot be guessed, however...
+   */
+  vmeUniverseInstallIrqMgr(4,BSP_PCI_IRQ0+1,5,BSP_PCI_IRQ0+8);
   if (vmeUniverse0PciIrqLine<0)
 	BSP_panic("Unable to get interrupt line info from PCI config");
   _BSP_vme_bridge_irq=vmeUniverse0PciIrqLine;
