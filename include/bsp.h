@@ -30,6 +30,7 @@
  * PCI memory space as seen from the CPU
  */
 #define PCI_MEM_BASE		0x00000000
+#define PCI_MEM_BASE_ADJUSTMENT	0x00000000
 
 /*
  *  confdefs.h overrides for this BSP:
