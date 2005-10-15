@@ -293,6 +293,7 @@ void bsp_start( void )
   /*
    * Initialize default raw exception handlers. See vectors/vectors_init.c
    */
+  Cpu_table.exceptions_in_RAM 	 = TRUE;
   initialize_exceptions();
 
   if (!(chpt=BSP_boardType())) {
@@ -396,7 +397,6 @@ void bsp_start( void )
   Cpu_table.interrupt_stack_size = CONFIGURE_INTERRUPT_STACK_MEMORY;
   /* TB is clocked by PPC bus clock / timebase divisor */
   Cpu_table.clicks_per_usec 	 = BSP_bus_frequency/(BSP_time_base_divisor * 1000);
-  Cpu_table.exceptions_in_RAM 	 = TRUE;
 
   /* did they pass a workspace size on the commandline ? */
   {
