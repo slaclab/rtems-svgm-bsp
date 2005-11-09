@@ -19,27 +19,28 @@ static int pci_swizzle(int slot, int pin)
 }
 
 #define OPTS	PCI_FIXUP_OPT_OVERRIDE_NAME
+#define IRQ_OFF	BSP_PCI_IRQ0
 
 static struct _int_map iroutemap[] = {
 	/* bus, slot, opts, route { pin, names[4] } */
 	/* SCSI/Ethernet */
-	{    0,   12, OPTS,  { { 1, { BSP_PCI_IRQ0 + 11 , -1, -1, -1 } },
-	                       { 2, { BSP_PCI_IRQ0 + 10 , -1, -1, -1 } },
+	{    0,   12, 0,     { { 1, { IRQ_OFF + 11 , -1, -1, -1 } },
+	                       { 2, { IRQ_OFF + 10 , -1, -1, -1 } },
                            NULL_PINMAP } },
 	/* PMC I */
-	{    0,   13, OPTS,  { { 1, { BSP_PCI_IRQ0 + 3 , -1, -1, -1 } },
-	                       { 2, { BSP_PCI_IRQ0 + 2 , -1, -1, -1 } },
-	                       { 3, { BSP_PCI_IRQ0 + 9 , -1, -1, -1 } },
-	                       { 4, { BSP_PCI_IRQ0 + 0 , -1, -1, -1 } },
+	{    0,   13, OPTS,  { { 1, { IRQ_OFF + 3 , -1, -1, -1 } },
+	                       { 2, { IRQ_OFF + 2 , -1, -1, -1 } },
+	                       { 3, { IRQ_OFF + 9 , -1, -1, -1 } },
+	                       { 4, { IRQ_OFF + 0 , -1, -1, -1 } },
                            NULL_PINMAP } },
 	/* PMC II */
-	{    0,   14, OPTS,  { { 4, { BSP_PCI_IRQ0 + 3 , -1, -1, -1 } }, 
-	                       { 1, { BSP_PCI_IRQ0 + 2 , -1, -1, -1 } }, 
-	                       { 2, { BSP_PCI_IRQ0 + 9 , -1, -1, -1 } }, 
-	                       { 3, { BSP_PCI_IRQ0 + 0 , -1, -1, -1 } }, 
+	{    0,   14, OPTS,  { { 4, { IRQ_OFF + 3 , -1, -1, -1 } }, 
+	                       { 1, { IRQ_OFF + 2 , -1, -1, -1 } }, 
+	                       { 2, { IRQ_OFF + 9 , -1, -1, -1 } }, 
+	                       { 3, { IRQ_OFF + 0 , -1, -1, -1 } }, 
                            NULL_PINMAP } },
 	/* Universe */
-	{    0,   17, OPTS,  { { 1, { BSP_PCI_IRQ0 + 3 , BSP_PCI_IRQ0 + 2, BSP_PCI_IRQ0 + 9, BSP_PCI_IRQ0 + 0 } },
+	{    0,   17, 0,     { { 1, { IRQ_OFF + 3 , IRQ_OFF + 2, IRQ_OFF + 9, IRQ_OFF + 0 } },
                            NULL_PINMAP } },
 	NULL_INTMAP
 };

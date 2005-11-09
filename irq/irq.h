@@ -59,7 +59,7 @@ typedef enum {
    * CAUTION : BSP_PCI_IRQ_LOWEST_OFFSET should be equal to OPENPIC_VEC_SOURCE
    */
   BSP_PCI_IRQ_NUMBER		=	16,
-  BSP_PCI_IRQ_LOWEST_OFFSET	=	16, /* _MUST_ be the same as OPENPIC_VEC_SOURCE */
+  BSP_PCI_IRQ_LOWEST_OFFSET	=	0, 
   BSP_PCI_IRQ_MAX_OFFSET	= 	BSP_PCI_IRQ_LOWEST_OFFSET + BSP_PCI_IRQ_NUMBER - 1,
   /*
    * PowerPc exceptions handled as interrupt where a rtems managed interrupt

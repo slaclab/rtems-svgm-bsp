@@ -48,12 +48,14 @@ static rtems_irq_connect_data     	defaultIrq = {
   0, 			 nop_func	, nop_func	, nop_func	, not_connected
 };
 static rtems_irq_prio irqPrioTable[BSP_IRQ_NUMBER]={
+#if 0
   /*
    * actual rpiorities for interrupt :
    *	0   means that only current interrupt is masked
    *	255 means all other interrupts are masked
    */
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* these are placeholders; nothing's there */
+#endif
   /*
    * PCI Interrupts
    */
