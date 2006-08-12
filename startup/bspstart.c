@@ -28,6 +28,8 @@
 #include <bsp.h>
 #include <rtems/libio.h>
 #include <rtems/libcsupport.h>
+#include <rtems/bspIo.h>
+#include <rtems/powerpc/powerpc.h> /* for PPC_MINIMUM_STACK_FRAME_SIZE */
 #include <bsp/uart.h>
 #include <libcpu/spr.h>
 #include <bsp/pci.h>
@@ -41,7 +43,7 @@
 #include <bsp/vectors.h>
 #include <bsp/bspVGM.h>
 #include <bsp/bspException.h>
-#include <synergyregs.h>
+#include "../synergy/synergyregs.h"
 
 /* for RTEMS_VERSION :-( I dont like the preassembled string */
 #include <rtems/sptables.h>
@@ -61,8 +63,26 @@
 #undef   SHOW_MORE_INIT_SETTINGS
 
 
-#include "bspstart_common.c"
-#include "cmdline.c"
+#define CMDLINE_BUF_SIZE	2048
+
+static char cmdline_buf[CMDLINE_BUF_SIZE];
+char *BSP_commandline_string = cmdline_buf;
+
+/* this routine is called early and must be safe with a not properly
+ * aligned stack
+ */
+void
+save_boot_params(void *r3, void *r4, void* r5, char *cmdline_start, char *cmdline_end)
+{
+int             i=cmdline_end-cmdline_start;
+	if ( i >= CMDLINE_BUF_SIZE )
+		i = CMDLINE_BUF_SIZE-1;
+	else if ( i < 0 )
+		i = 0;
+        memmove(cmdline_buf, cmdline_start, i);
+	cmdline_buf[i]=0;
+}
+
 
 /* a couple of declarations we have no header for :-( */
 void
@@ -70,6 +90,9 @@ _BSP_pciCacheInit();
 
 void
 _BSP_pciIRouteFixup();
+
+void
+bsp_pretasking_hook(void);
 
 BSP_output_char_function_type BSP_output_char = BSP_output_char_via_serial;
 
@@ -103,6 +126,7 @@ extern void		L1_caches_enables();
 extern unsigned get_L2CR();
 extern unsigned set_L2CR(unsigned);
 extern void		bsp_cleanup(void);
+extern unsigned __rtems_end[];	/* linker script; declared as an array so it is not assumed to be in short data area */
 
 /*
  * Vital Board data obtained from VGM board registers
@@ -111,6 +135,10 @@ extern void		bsp_cleanup(void);
  * Total memory
  */
 unsigned int BSP_mem_size;
+/*
+ * Where the heap starts; is used by bsp_pretasking_hook;
+ */
+unsigned int BSP_heap_start;
 /*
  * CPU/PPC Bus Frequency
  */
@@ -184,14 +212,14 @@ BSP_UartBreakCbRec cb;
 void bsp_start( void )
 {
   unsigned char				*stack;
-  unsigned long				*r1sp;
+  unsigned 					*r1sp;
   unsigned					l2cr;
-  register unsigned char*	intrStack;
+  unsigned					intrStack;
   unsigned char				*work_space_start;
   ppc_cpu_id_t				myCpu;
   ppc_cpu_revision_t		myCpuRevision;
   unsigned char				reg;
-  const unsigned char		*chpt;
+  const char				*chpt;
   Triv121PgTbl				pt;
 
   /*
@@ -256,14 +284,14 @@ void bsp_start( void )
    * so there is no need to set it in r1 again... It is just for info
    * so that It can be printed without accessing R1.
    */
-  stack = ((unsigned char*) __rtems_end) + INIT_STACK_SIZE - CPU_MINIMUM_STACK_FRAME_SIZE;
+  stack = ((unsigned char*) __rtems_end) + INIT_STACK_SIZE - PPC_MINIMUM_STACK_FRAME_SIZE;
 
   /* tag the bottom, so a stack trace utility may know when to stop */
-  *((unsigned32 *)stack) = 0;
+  *((uint32_t *)stack) = 0;
 
   /* fill stack with pattern for debugging */
   __asm__ __volatile__("mr %0, %%r1":"=r"(r1sp));
-  while (--r1sp >= (unsigned long*)__rtems_end)
+  while (--r1sp >= __rtems_end)
 	  *r1sp=0xeeeeeeee;
 
   /*
@@ -273,19 +301,23 @@ void bsp_start( void )
    * This could be done latter (e.g in IRQ_INIT) but it helps to understand
    * some settings below...
    */
-  intrStack = ((unsigned char*) __rtems_end) + INIT_STACK_SIZE + INTR_STACK_SIZE - CPU_MINIMUM_STACK_FRAME_SIZE;
+  BSP_heap_start = ((unsigned) __rtems_end) + INIT_STACK_SIZE + INTR_STACK_SIZE;
+
+  /* reserve space for the marker/tag frame */
+  intrStack      = BSP_heap_start - PPC_MINIMUM_STACK_FRAME_SIZE;
 
   /* make sure it's properly aligned */
-  (unsigned32)intrStack &= ~(CPU_STACK_ALIGNMENT-1);
+  intrStack &= ~(CPU_STACK_ALIGNMENT-1);
 
-  /* tag the bottom of the interrupt stack as well */
-  *((unsigned32 *)intrStack) = 0;
+  /* tag the bottom (T. Straumann 6/36/2001 <strauman@slac.stanford.edu>) */
+  r1sp  =(unsigned*)intrStack;
+  *r1sp = 0;
+
   /* fill interrupt stack with pattern for debugging */
-  r1sp=(unsigned long*)intrStack;
-  while (--r1sp >= (unsigned long*)( intrStack - (INTR_STACK_SIZE - 8)))
+  while (--r1sp >= (unsigned*)( intrStack - (INTR_STACK_SIZE - 16)))
 	  *r1sp=0xeeeeeeee;
 
-  _write_SPRG1((unsigned int)intrStack);
+  _write_SPRG1(intrStack);
 
   /* signal them that we have fixed PR288 - eventually, this should go away */
   _write_SPRG0(PPC_BSP_HAS_FIXED_PR288);
@@ -327,15 +359,17 @@ void bsp_start( void )
   /* initialize pci driver. We just supply the SVGM's 
    * config_addr / config_data addresses here
    */
-  InitializePCI();
+  pci_initialize();
 
   _BSP_pciIRouteFixup();
 
   /* Install our own exception handler (needs PCI) */
   globalExceptHdl = BSP_exceptionHandler;
 
+#if 0
   /* now build the pci device cache which supports BSP_pciFindDevice() */
   _BSP_pciCacheInit();
+#endif
   /* read board info registers */
   reg = *SYN_VGM_REG_INFO_MEMORY;
   BSP_mem_size 				= 
@@ -401,9 +435,8 @@ void bsp_start( void )
   /* did they pass a workspace size on the commandline ? */
   {
   long size=0;
-  CmdLine cmdline = (CmdLine)heapStart();
-  printk("bspstart: **** GOT COMMANDLINE: >>>%s<<<\n",cmdline->buf);
-  if ( (chpt = strstr(cmdline->buf, "WSPC=")) ) {
+  printk("bspstart: **** GOT COMMANDLINE: >>>%s<<<\n",BSP_commandline_string);
+  if ( (chpt = strstr(BSP_commandline_string, "WSPC=")) ) {
     /* strip quotes */
     for ( chpt+=5; '\''==*chpt; chpt++ )
       /* nothing else to do */;

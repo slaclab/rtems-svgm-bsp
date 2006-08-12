@@ -9,7 +9,7 @@
 /* get type description string for this board ("VGM5", "VGMD", ...)
  * RETURNS: constant string or 0 for unsupported board types
  */
-const unsigned char *
+const char *
 BSP_boardType(void);
 
 /* Try to determine the CPU clock frequency for this board.

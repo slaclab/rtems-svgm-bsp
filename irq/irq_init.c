@@ -38,14 +38,14 @@ static void nop_func(){}
 static int not_connected() {return 0;}
 /*
  * default possible isOn function
- */
 static int connected() {return 1;}
+ */
 
 static rtems_irq_connect_data     	rtemsIrq[BSP_IRQ_NUMBER];
 static rtems_irq_global_settings     	initial_config;
 static rtems_irq_connect_data     	defaultIrq = {
-  /* vectorIdex,	 hdl		, on		, off		, isOn */
-  0, 			 nop_func	, nop_func	, nop_func	, not_connected
+  /* vectorIdex,	 hdl		, handle	, on		, off		, isOn */
+  0, 			 nop_func	, NULL		, nop_func	, nop_func	, not_connected
 };
 static rtems_irq_prio irqPrioTable[BSP_IRQ_NUMBER]={
   /*
@@ -77,13 +77,13 @@ void BSP_rtems_irq_mng_init(unsigned cpuId)
 #ifdef TRACE_IRQ_INIT  
   printk("Going to scan the PCI bus for the IBM MPIC\n");
 #endif       
-  if ( BSP_pciFindDevice(PCI_VENDOR_ID_IBM,
+  if ( pci_find_device(PCI_VENDOR_ID_IBM,
 	  		PCI_DEVICE_ID_IBM_MPIC,
 			0,
 			&bus,
 			&dev,
 			&fn) ||
-	pci_read_config_dword(bus,dev,fn,PCI_BASE_ADDRESS_0,(unsigned int*)&OpenPIC) ||
+	pci_read_config_dword(bus,dev,fn,PCI_BASE_ADDRESS_0,(void*)&OpenPIC) ||
         ! OpenPIC ) {
 	  BSP_panic("Unable to find MPIC");
   }

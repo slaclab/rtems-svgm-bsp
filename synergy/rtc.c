@@ -1,6 +1,6 @@
 /* $Id$ */
 
-#include <svgmRtc.h>
+#include <bsp/svgmRtc.h>
 #include <libcpu/io.h>
 
 /* Register definitions for the M48T201Y Clock/Timekeeper */

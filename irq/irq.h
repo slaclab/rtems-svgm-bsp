@@ -33,6 +33,10 @@
 extern "C" {
 #endif
 
+#define BSP_SHARED_HANDLER_SUPPORT      1
+#include <rtems/irq.h>
+
+
 /*
  * Symbolic IRQ names and related definitions.
  */
@@ -85,9 +89,9 @@ typedef enum {
      */	       
 
   /* on the SVGM these are actually PCI irqs */
-  BSP_ISA_UART_COM2_IRQ		=	BSP_PCI_IRQ_LOWEST_OFFSET + 14,
+  BSP_UART_COM2_IRQ		=	BSP_PCI_IRQ_LOWEST_OFFSET + 14,
 
-  BSP_ISA_UART_COM1_IRQ		=	BSP_PCI_IRQ_LOWEST_OFFSET + 15,
+  BSP_UART_COM1_IRQ		=	BSP_PCI_IRQ_LOWEST_OFFSET + 15,
 
     /*
      * Some PCI IRQ symbolic name definition
@@ -117,11 +121,19 @@ static inline int BSP_irq_ack_at_i8259s(irqLine)		{ return 0; }
 static inline int BSP_irq_enabled_at_i8259s(irqLine)	{ return 0; }
 #define i8259s_cache (*(rtems_i8259_masks *)(0))
 
+/*
+ * PIC-independent function to enable/disable interrupt lines at
+ * the pic.
+ */
+extern void BSP_enable_irq_at_pic		(const rtems_irq_number irqLine);
+extern void BSP_disable_irq_at_pic		(const rtems_irq_number irqLine);
+
+extern int BSP_setup_the_pic			(rtems_irq_global_settings* config);
+extern void BSP_rtems_irq_mng_init(unsigned cpuId);
+
 #ifdef __cplusplus
 };
 #endif
-
-#include <bsp/bsp_common_irq.h>
 
 #endif
 

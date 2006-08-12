@@ -1,13 +1,13 @@
 /* $Id$ */
-#include <bspVGM.h>
-#include <synergyregs.h>
+#include <bsp/bspVGM.h>
+#include "synergyregs.h"
 #include <rtems/bspIo.h>
 #include <libcpu/spr.h>
 #include <libcpu/cpuIdent.h>
 
 SPR_RO(HID1)
 
-const unsigned char *
+const char *
 BSP_boardType(void)
 {
 unsigned char boardRev=*SYN_VGM_REG_INFO_BOARD_REV;

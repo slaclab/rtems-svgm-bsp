@@ -37,4 +37,17 @@
  */
 extern int _BSP_vme_bridge_irq;
 
+extern int BSP_VMEInit();
+extern int BSP_VMEIrqMgrInstall();
+
+#define BSP_VME_UNIVERSE_INSTALL_IRQ_MGR		\
+	do {										\
+		vmeUniverseInstallIrqMgr(				\
+			4, BSP_PCI_IRQ_LOWEST_OFFSET + 1,	\
+			5, BSP_PCI_IRQ_LOWEST_OFFSET + 8);	\
+	} while (0)
+
+/* setup bat2 for VME */
+#define BSP_VME_BAT_IDX	2
+
 #endif

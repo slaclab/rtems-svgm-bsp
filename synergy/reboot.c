@@ -5,7 +5,7 @@
 #include <bsp/vmeUniverse.h>
 #include <rtems/bspIo.h>
 #include <libcpu/stackTrace.h>
-#include <bspVGM.h>
+#include <bsp/bspVGM.h>
 
 /* vector through a pointer for trying
  * a VME reset.

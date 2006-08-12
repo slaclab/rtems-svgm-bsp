@@ -11,8 +11,8 @@
  * NOTE: supplying 0 usecs disables the WD.
  */
 
-#include <bspVGM.h>
-#include <synergyregs.h>
+#include <bsp/bspVGM.h>
+#include "synergyregs.h"
 #include <bsp/openpic.h>
 #include <libcpu/io.h>
 

@@ -1,20 +1,9 @@
-%rename cpp old_cpp
-%rename lib old_lib
 %rename endfile old_endfile
 %rename startfile old_startfile
 %rename link old_link
 
-*cpp:
-%(old_cpp) %{qrtems: -D__embedded__ -DUSE_ENHANCED_INTR_API} -Asystem(embedded)
-
-*lib:
-%{!qrtems: %(old_lib)} %{!nostdlib: %{qrtems: --start-group \
-%{!qrtems_debug: -lrtemsbsp -lrtemscpu} %{qrtems_debug: -lrtemsbsp_g -lrtemscpu_g} \
--lc -lgcc --end-group  \
-%{!qnolinkcmds: -T linkcmds%s}}}
-
 *startfile:
-%{!qrtems: %(old_startfile)} %{!nostdlib: %{qrtems:  ecrti%O%s rtems_crti%O%s crtbegin.o%s  \
+%{!qrtems: %(old_startfile)} %{!nostdlib: %{qrtems:  ecrti%O%s rtems_crti%O%s  crtbegin.o%s  \
 %{!qrtems_debug: svgmstart.o%s} \
 %{qrtems_debug: svgmstart_g.o%s}}}
 

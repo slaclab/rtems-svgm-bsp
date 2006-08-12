@@ -153,11 +153,15 @@ MODULE_PARM(gx_fix, "i");
 #ifndef KERNEL
 #define KERNEL
 #endif
+#ifndef _KERNEL
+#define _KERNEL
+#endif
 
 #include <rtems.h>
 #include <rtems/bspIo.h>				/* printk */
 #include <stdio.h>						/* printf for statistics */
 #include <string.h>
+#include <errno.h>
 #include <bsp/irq.h>
 #include <libcpu/byteorder.h>			/* st_le32 & friends */
 #include <libcpu/io.h>					/* inp & friends */
@@ -168,7 +172,7 @@ MODULE_PARM(gx_fix, "i");
 /* and back... */
 #define bus_to_virt(addr)	((addr)-PCI_DRAM_OFFSET)	/* on CHRP :-) */
 
-#define le32_to_cpu(var)	ld_le32((volatile unsigned *)&var)
+#define le32_to_cpu(var)	ld_le32((volatile u32 *)&var)
 #ifdef __PPC
 #define get_unaligned(addr)	(*(addr))
 #endif
@@ -178,15 +182,18 @@ MODULE_PARM(gx_fix, "i");
 #include <bsp/pci.h>
 #include <rtems/rtems_bsdnet.h>
 
-#include <sys/param.h>
 #include <sys/mbuf.h>
-
 #include <sys/socket.h>
 #include <sys/sockio.h>
+#include <net/ethernet.h>
 #include <net/if.h>
 #include <netinet/in.h>
 #include <netinet/if_ether.h>
-#include <libchip/if_media.h>
+
+#include <net/if_media.h>
+#include <dev/mii/mii.h>
+#include <rtems/rtems_mii_ioctl.h>
+
 
 /* RTEMS event to kill the daemon */
 #define KILL_EVENT		RTEMS_EVENT_1
@@ -479,7 +486,7 @@ static int read_eeprom(long ioaddr, int location);
 static void yellowfin_stats(struct yellowfin_private *yp);
 static int mdio_read(long ioaddr, int phy_id, int location);
 static void mdio_write(long ioaddr, int phy_id, int location, int value);
-static int yellowfin_ioctl(struct ifnet *ifp, int cmd, caddr_t data);
+static int yellowfin_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data);
 static int yellowfin_init_hw(struct yellowfin_private *yp);
 static void yellowfin_timer(struct ifnet *ifp);
 #ifdef TSILL_TODO
@@ -492,7 +499,7 @@ static void yellowfin_error(struct yellowfin_private *dev, u16);
 static void yellowfin_stop(struct yellowfin_private *yp);
 static int yellowfin_stop_hw(struct yellowfin_private *yp);
 static void yellowfin_start(struct ifnet * ifp);
-static rtems_isr yellowfin_isr(void);
+static rtems_isr yellowfin_isr(rtems_irq_hdl_param);
 static void yellowfin_irq_on(const rtems_irq_connect_data *);
 static void yellowfin_irq_off(const rtems_irq_connect_data *);
 static int yellowfin_irq_is_on(const rtems_irq_connect_data *);
@@ -546,7 +553,7 @@ rtems_yellowfin_driver_attach(struct rtems_bsdnet_ifconfig *config, int attach)
 
 	/* scan the PCI bus */
 	for (i=0; pci_id_tbl[i].name; i++) {
-		if (0==BSP_pciFindDevice(pci_id_tbl[i].vendor,
+		if (0==pci_find_device(pci_id_tbl[i].vendor,
 					   pci_id_tbl[i].device,
 					   unit - 1, /* instance - NOTE: currently unimplemented */
 					   &pciB,
@@ -789,10 +796,10 @@ static int yellowfin_irq_is_on(const rtems_irq_connect_data *c)
 }
 
 
-/* Oh well, this is really, really, STUPID
- * --> only ONE instance supported
+/*
+ * Only one instance supported for now...
  */
-static void yellowfin_isr(void)
+static void yellowfin_isr(rtems_irq_hdl_param arg)
 {
 struct yellowfin_private *yp = root_yellowfin_dev;
 u16				intr_status = inw(yp->base_addr + IntrStatus);
@@ -1022,15 +1029,15 @@ static void yellowfin_init_ring(struct yellowfin_private *yp)
 	yp->rx_head_desc = &yp->rx_ring[0];
 
 	for (i = 0; i < RX_RING_SIZE; i++) {
-		st_le32((volatile unsigned32 *)
+		st_le32((volatile u32 *)
 			&yp->rx_ring[i].dbdma_cmd,
 			CMD_RX_BUF | INTR_ALWAYS | yp->rx_buf_sz);
-		st_le32((volatile unsigned32 *)
+		st_le32((volatile u32 *)
 			&yp->rx_ring[i].branch_addr,
 		       	(unsigned long)virt_to_bus(&yp->rx_ring[i+1]));
 	}
 	/* Mark the last entry as wrapping the ring. */
-	st_le32((volatile unsigned32 *)
+	st_le32((volatile u32 *)
 		&yp->rx_ring[i-1].branch_addr,
 	        (unsigned long)virt_to_bus(&yp->rx_ring[0]));
 
@@ -1041,11 +1048,11 @@ static void yellowfin_init_ring(struct yellowfin_private *yp)
 		m->m_pkthdr.rcvif =  &yp->arpcom.ac_if;
 
 		yp->rx_mbuf[i] = m;
-		st_le32((volatile unsigned32 *)
+		st_le32((volatile u32 *)
 			&yp->rx_ring[i].addr,
 		       	(unsigned long)virt_to_bus(mtod(m, void*)));
 	}
-	st_le32((volatile unsigned32 *)
+	st_le32((volatile u32 *)
 		&yp->rx_ring[i-1].dbdma_cmd,
 	       	CMD_STOP);
 	yp->dirty_rx = (unsigned int)(i - RX_RING_SIZE);
@@ -1062,18 +1069,18 @@ static void yellowfin_init_ring(struct yellowfin_private *yp)
 	/* In this mode the Tx ring needs only a single descriptor. */
 	for (i = 0; i < TX_RING_SIZE; i++) {
 		yp->tx_mbuf[i] = 0;
-		st_le32((volatile unsigned32 *)
+		st_le32((volatile u32 *)
 			& yp->tx_ring[i].dbdma_cmd,
 		       	CMD_STOP);
-		st_le32((volatile unsigned32 *)
+		st_le32((volatile u32 *)
 			&yp->tx_ring[i].branch_addr,
 		       	(unsigned long)virt_to_bus(&yp->tx_ring[i+1]));
 	}
 	/* Wrap ring */
-	st_le32((volatile unsigned32 *)
+	st_le32((volatile u32 *)
 		&yp->tx_ring[--i].dbdma_cmd,
 	       	CMD_STOP | BRANCH_ALWAYS);
-	st_le32((volatile unsigned32 *)
+	st_le32((volatile u32 *)
 		&yp->tx_ring[i].branch_addr,
 	       	(unsigned long)virt_to_bus(&yp->tx_ring[0]));
 #else
@@ -1174,23 +1181,23 @@ static int yellowfin_sendpacket(struct mbuf *m, struct yellowfin_private *yp)
 	} else {
 		/* single mbuf packet; just pass it on */
 	}
-	st_le32((volatile unsigned32 *)
+	st_le32((volatile u32 *)
 		&yp->tx_ring[entry].addr,
 	        (unsigned long)virt_to_bus(mtod(m, void *)));
 	yp->tx_ring[entry].result_status = 0;
 	if (entry >= TX_RING_SIZE-1) {
 		/* New stop command. */
-		st_le32((volatile unsigned32 *)
+		st_le32((volatile u32 *)
 			&yp->tx_ring[0].dbdma_cmd,
 		        CMD_STOP);
-		st_le32((volatile unsigned32 *)
+		st_le32((volatile u32 *)
 			&yp->tx_ring[TX_RING_SIZE-1].dbdma_cmd,
 			(CMD_TX_PKT|BRANCH_ALWAYS | m->m_len));
 	} else {
-		st_le32((volatile unsigned32 *)
+		st_le32((volatile u32 *)
 			&yp->tx_ring[entry+1].dbdma_cmd,
 			CMD_STOP);
-		st_le32((volatile unsigned32 *)
+		st_le32((volatile u32 *)
 			&yp->tx_ring[entry].dbdma_cmd,
 			(CMD_TX_PKT | BRANCH_IFTRUE | m->m_len));
 	}
@@ -1636,7 +1643,7 @@ static int yellowfin_rx(struct yellowfin_private *yp)
 #ifdef TSILL_TODO
 			skb_reserve(skb, 2);	 /* Align IP on 16 byte boundaries */
 #endif
-			st_le32((volatile unsigned32 *)
+			st_le32((volatile u32 *)
 				&yp->rx_ring[entry].addr,
 		       		(unsigned long)virt_to_bus(mtod(m, void*)));
 		}
@@ -1653,16 +1660,16 @@ static int yellowfin_rx(struct yellowfin_private *yp)
 		 * Yet, I leave it here for the moment, so I can re-use
 		 * Don's code.
 		 */
-		st_le32((volatile unsigned32 *)
+		st_le32((volatile u32 *)
 			&yp->rx_ring[entry].dbdma_cmd,
 			CMD_STOP);
 		yp->rx_ring[entry].result_status = 0;	/* Clear complete bit. */
 		if (entry != 0)
-			st_le32((volatile unsigned32 *)
+			st_le32((volatile u32 *)
 				&yp->rx_ring[entry - 1].dbdma_cmd,
 				(CMD_RX_BUF | INTR_ALWAYS | yp->rx_buf_sz));
 		else
-			st_le32((volatile unsigned32 *)
+			st_le32((volatile u32 *)
 				&yp->rx_ring[RX_RING_SIZE - 1].dbdma_cmd,
 				(CMD_RX_BUF | INTR_ALWAYS | BRANCH_ALWAYS
 							| yp->rx_buf_sz));
@@ -1799,7 +1806,7 @@ static int yellowfin_stop_hw(struct  yellowfin_private *yp)
 
 	/* Free all the skbuffs in the Rx queue. */
 	for (i = 0; i < RX_RING_SIZE; i++) {
-		st_le32((volatile unsigned32 *)
+		st_le32((volatile u32 *)
 			&yp->rx_ring[i].dbdma_cmd,
 			CMD_STOP);
 		yp->rx_ring[i].addr = 0xBADF00D0; /* An invalid address. */
@@ -1931,7 +1938,7 @@ static int set_rx_mode(struct yellowfin_private *yp)
 #warning "YELLOWFIN: SIOCxMIIxx seem to be defined, cleanup yellowfin.c..."
 #endif
 
-static int yellowfin_ioctl(struct ifnet *ifp, int cmd, caddr_t arg)
+static int yellowfin_ioctl(struct ifnet *ifp, u_long cmd, caddr_t arg)
 {
 	int		rval=0;
 	struct yellowfin_private *np = ifp->if_softc;

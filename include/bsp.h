@@ -13,8 +13,8 @@
 #define LIBBSP_POWERPC_SVGM_BSP_H
 
 #include <rtems.h>
-#include <console.h>
-#include <clockdrv.h>
+#include <rtems/console.h>
+#include <rtems/clockdrv.h>
 #include <bsp/vectors.h>
 
 #include <libcpu/io.h>
@@ -55,6 +55,11 @@
 
 #define BSP_PIC_DO_EOI		openpic_eoi(0)
 
+/* Use a task notepad to attach user exception handler info;
+ * may be changed by application startup code (EPICS uses 11)
+ */
+#define BSP_EXCEPTION_NOTEPAD		14
+ 
 #ifndef ASM
 /* drivers should not use these anyway */
 #define outport_byte(port,value)
@@ -69,6 +74,10 @@
  * Total memory read from board register
  */
 extern unsigned int BSP_mem_size;
+/*
+ * Start of the heap
+ */
+extern unsigned int BSP_heap_start;
 /*
  * PPC Bus Frequency
  */

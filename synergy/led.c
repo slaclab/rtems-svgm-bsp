@@ -8,8 +8,8 @@
  */
 
 
-#include <synergyregs.h>
-#include <bspVGM.h>
+#include "synergyregs.h"
+#include <bsp/bspVGM.h>
 #include <libcpu/io.h>
 
 void
