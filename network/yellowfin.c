@@ -190,6 +190,7 @@ MODULE_PARM(gx_fix, "i");
 #include <netinet/in.h>
 #include <netinet/if_ether.h>
 
+#include <net/if.h>
 #include <net/if_media.h>
 #include <dev/mii/mii.h>
 #include <rtems/rtems_mii_ioctl.h>
@@ -744,6 +745,32 @@ static void mdio_write(long ioaddr, int phy_id, int location, int value)
 	return;
 }
 
+/* mdio / mii interface wrappers for rtems_mii_ioctl API */
+
+static int yf_mdio_r(int phy, void *uarg, unsigned reg, uint32_t *pval)
+{
+struct yellowfin_private *yp = uarg;
+	if ( phy >= yp->mii_cnt )
+		return -1;
+
+	*pval = mdio_read(yp->base_addr, yp->phys[phy], reg);
+	return 0;
+}
+
+static int yf_mdio_w(int phy, void *uarg, unsigned reg, uint32_t val)
+{
+struct yellowfin_private *yp = uarg;
+	if ( phy >= yp->mii_cnt )
+		return -1;
+	mdio_write(yp->base_addr, yp->phys[phy], reg, (int)val);
+	return 0;
+}
+
+static struct rtems_mdio_info yf_mdio = {
+	mdio_r:	  yf_mdio_r,
+	mdio_w:	  yf_mdio_w,
+	has_gmii: 0,
+};
 
 /* stupid rtems IRQ interface doesn't pass a user
  * pointer in rtems_irq_connect_data.
@@ -1955,10 +1982,8 @@ static int yellowfin_ioctl(struct ifnet *ifp, u_long cmd, caddr_t arg)
 		/* handles SIOxIFADDR, SIOCSIFMTU */
 		return ether_ioctl(ifp, cmd, arg);
 
-#if 0
 	case SIOCGIFMEDIA:
-		return	yf_pollstat((struct ifmediareq*)arg);
-#endif
+		return	rtems_mii_ioctl(&yf_mdio, np, cmd, &ifr->ifr_media);
 
 	case SIOCSIFMEDIA:
 		{
