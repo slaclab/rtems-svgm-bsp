@@ -53,6 +53,21 @@
 
 #include <bsp/openpic.h>
 
+/* BSP_PIC_DO_EOI is optionally used by the 'vmeUniverse' driver
+ * to implement VME IRQ priorities in software.
+ * Note that this requires support by the interrupt controller
+ * driver (cf. libbsp/shared/powerpc/irq/openpic_i8259_irq.c)
+ * and the BSP-specific universe initialization/configuration
+ * (cf. libbsp/shared/powerpc/vme/VMEConfig.h vme_universe.c)
+ *
+ * ********* IMPORTANT NOTE ********
+ * When deriving from this file (new BSPs)
+ * DO NOT define "BSP_PIC_DO_EOI" if you don't know what
+ * you are doing i.e., w/o implementing the required pieces
+ * mentioned above.
+ * ********* IMPORTANT NOTE ********
+ */
+
 #define BSP_PIC_DO_EOI		openpic_eoi(0)
 
 /* Use a task notepad to attach user exception handler info;
