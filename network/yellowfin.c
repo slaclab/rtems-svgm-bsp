@@ -487,7 +487,7 @@ static int read_eeprom(long ioaddr, int location);
 static void yellowfin_stats(struct yellowfin_private *yp);
 static int mdio_read(long ioaddr, int phy_id, int location);
 static void mdio_write(long ioaddr, int phy_id, int location, int value);
-static int yellowfin_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data);
+static int yellowfin_ioctl(struct ifnet *ifp, ioctl_command_t cmd, caddr_t data);
 static int yellowfin_init_hw(struct yellowfin_private *yp);
 static void yellowfin_timer(struct ifnet *ifp);
 #ifdef TSILL_TODO
@@ -1965,7 +1965,7 @@ static int set_rx_mode(struct yellowfin_private *yp)
 #warning "YELLOWFIN: SIOCxMIIxx seem to be defined, cleanup yellowfin.c..."
 #endif
 
-static int yellowfin_ioctl(struct ifnet *ifp, u_long cmd, caddr_t arg)
+static int yellowfin_ioctl(struct ifnet *ifp, ioctl_command_t cmd, caddr_t arg)
 {
 	int		rval=0;
 	struct yellowfin_private *np = ifp->if_softc;
