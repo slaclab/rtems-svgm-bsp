@@ -145,7 +145,7 @@ int				count;
 
 	if ( !PCI_STATUS_GRCKL_OK(rval) && !quiet) {
 		printk("Cleared Grackle errors: pci_stat was 0x%04x errdr1 0x%02x errdr2 0x%02x\n",
-					pcistat_orig, errdr1, errdr2);
+					pcistat_orig, (rval>>16)&0xff, (rval>>24)&0xff);
   	}
 
 	if ( PCI_STATUS_GRCKL_OK(status) && enableMCP) {
