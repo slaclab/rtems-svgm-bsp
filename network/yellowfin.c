@@ -36,9 +36,23 @@ static const char version2[] =
 
 #define YF_NEW 1
 
+/* Operational parameters that are set at compile time. */
+
+/* Keep the ring sizes a power of two for efficiency.
+   Making the Tx ring too long decreases the effectiveness of channel
+   bonding and packet priority.
+   There are no ill effects from too-large receive rings. */
+#define TX_RING_SIZE	16
+#define TX_QUEUE_SIZE	12		/* Must be > 4 && <= TX_RING_SIZE */
+#define RX_RING_SIZE	32		/* TSILL_TODO was 64, reduced because RTEMS ran out of mbufs */
+/* TODO: use of MBUF clusters (4k each) seems to be quite wasteful
+ * for ethernet...
+ */
+#define NO_TXSTATS				/* undefining is currently not supported under RTEMS */
+
 int yellowfin_debug = 1;				/* 1 normal messages, 0 quiet .. 7 verbose. */
 /* Maximum events (Rx packets, etc.) to handle at each event reception. */
-int yellowfin_max_interrupt_work = 20;
+int yellowfin_max_interrupt_work = RX_RING_SIZE + TX_RING_SIZE;
 #ifdef YF_PROTOTYPE						/* Support for prototype hardware errata. */
 /* System-wide count of bogus-rx frames. */
 static int bogus_rx = 0;
@@ -66,19 +80,6 @@ static int full_duplex[MAX_UNITS] = {-1, -1, -1, -1, -1, -1, -1, -1};
 
 /* Do ugly workaround for GX server chipset errata. */
 static int gx_fix = 0;
-
-/* Operational parameters that are set at compile time. */
-
-/* Keep the ring sizes a power of two for efficiency.
-   Making the Tx ring too long decreases the effectiveness of channel
-   bonding and packet priority.
-   There are no ill effects from too-large receive rings. */
-#define TX_RING_SIZE	16
-#define TX_QUEUE_SIZE	12		/* Must be > 4 && <= TX_RING_SIZE */
-#define RX_RING_SIZE	32		/* TSILL_TODO was 64, reduced because RTEMS ran out of mbufs */
-/* TODO: use of MBUF clusters (4k each) seems to be quite wasteful
- * for ethernet...
- */
 
 /* Operational parameters that usually are not changed. */
 /* Time in jiffies before concluding the transmitter is hung. */
@@ -1049,6 +1050,9 @@ static void yellowfin_init_ring(struct yellowfin_private *yp)
 	int i;
 
 	yp->tx_free = TX_RING_SIZE;
+#ifdef NO_TXSTATS
+	yp->tx_free --; /* reserve slot for STOP command */
+#endif
 	yp->cur_rx = yp->cur_tx = 0;
 	yp->dirty_tx = 0;
 
@@ -1091,7 +1095,6 @@ static void yellowfin_init_ring(struct yellowfin_private *yp)
 	 *       invalidate others)
 	 */
 
-#define NO_TXSTATS
 #ifdef NO_TXSTATS
 	/* In this mode the Tx ring needs only a single descriptor. */
 	for (i = 0; i < TX_RING_SIZE; i++) {
