@@ -42,7 +42,10 @@ static const char version2[] =
    Making the Tx ring too long decreases the effectiveness of channel
    bonding and packet priority.
    There are no ill effects from too-large receive rings. */
-#define TX_RING_SIZE	16
+#define TX_RING_SIZE	16      /* Must be > 1 &&  < 2^5; tx_free is only 4 bits!!! 
+                                 * but 2^5 is OK in NO_TXSTATS mode (see below where
+                                 * tx_free is initialized).
+                                 */
 #define TX_QUEUE_SIZE	12		/* Must be > 4 && <= TX_RING_SIZE */
 #define RX_RING_SIZE	32		/* TSILL_TODO was 64, reduced because RTEMS ran out of mbufs */
 /* TODO: use of MBUF clusters (4k each) seems to be quite wasteful
@@ -1049,10 +1052,15 @@ static void yellowfin_init_ring(struct yellowfin_private *yp)
 {
 	int i;
 
-	yp->tx_free = TX_RING_SIZE;
+	/* Note that we subtract 1 in the macro -- tx_free is only
+     * 5 bits!! Using that trick we could use a 32-entry
+     * TX ring in NO_TXSTATS mode...
+     */
+	yp->tx_free = TX_RING_SIZE
 #ifdef NO_TXSTATS
-	yp->tx_free --; /* reserve slot for STOP command */
+	              - 1 /* reserve slot for STOP command */
 #endif
+	;
 	yp->cur_rx = yp->cur_tx = 0;
 	yp->dirty_tx = 0;
 
