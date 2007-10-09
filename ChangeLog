@@ -1,1 +1,21 @@
-	* ChangeLog: New file.
+2007/10/08 (TS):
+ - (bspstart.c) resize IBAT0 (and while we're at it DBAT0, too even though
+   the latter is disabled once page tables are up) to ONLY cover
+   physical memory size.
+   This resolves mysterious exceptions which seem to be caused by
+   branch prediction into mapped but non-existent memory!
+ - (yellowfin.c) yellowfin TX descriptor ring was clobbered when completely full
+   because space for the STOP command entry was unaccounted for.
+   Fixed by initializing tx_free to ring size - 1.
+ - (yellowfin.c) increased yellowfin_max_interrupt_work to sum of ring sizes
+   to get rid of 'too much work for daemon' messages.
+ - (Makefile.am) MUST NOT use -msoft-float because this also prevents CR7
+   to be set/cleared when calling vararg routines (which may then save/restore
+   FP args on the stack or do other bad things) :-(
+   Still don't know how to deal with implicit usage of the FPU by GCC
+   (problem in ISRs and integer-only tasks).
+ - (detect_grackle_bridge.c) report original ERRDR1/EDDDR2 contents rather
+   than values read back after clearing these registers (affects only
+   printk message; routine's return value was always OK).
+
+ChangeLog: New file.
