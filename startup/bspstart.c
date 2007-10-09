@@ -372,9 +372,67 @@ void bsp_start( void )
 #endif
   /* read board info registers */
   reg = *SYN_VGM_REG_INFO_MEMORY;
-  BSP_mem_size 				= 
+  BSP_mem_size =  
 		SYN_VGM_REG_INFO_MEMORY_BANKS(reg) * 	/* number of banks */
 		SYN_VGM_REG_INFO_MEMORY_BANK_SIZE(reg); /* bank size */
+
+  /* Limit memory size to a power of 2 (need to
+   * reprogram the BATs and they only work with
+   * powers of two). If you HAVE to use an odd memory
+   * size then just use page tables (below) and maybe
+   * an IBAT covering the necessary text areas...
+   */
+  {
+  BATU     ubat;
+  BATL     lbat;
+  unsigned msr,sz;
+
+  asm volatile("	cntlzw %0,%1":"=r"(sz):"r"(BSP_mem_size));
+
+  sz = 31-sz;
+  /* Can't handle more than 256M in one BAT. If there
+   * ever is a board with more memory then we'd need
+   * a second BAT here until page tables are set up.
+   * Or we'd have to allocate the page hash table somewhere
+   * else (not at the top of physical memory) where dbat0
+   * can reach it.
+   */
+  if ( sz > 28 )
+	sz = 28;
+  BSP_mem_size = (1<<sz);
+
+  /* Reprogram the BATs to ONLY cover physical memory
+   * (before we enable MCP interrupts from the grackle).
+   * I experienced exceptions which I traced down to be
+   * caused by branch prediction into mapped but nonexisting
+   * memory!
+   */
+	memset(&ubat, 0, sizeof(ubat)); memset(&lbat, 0, sizeof(lbat));
+	/* We can use the same setting for IBAT and DBAT (IBAT 'w','g' must
+     * not be set for IBAT)
+     */
+    ubat.bepi = 0; ubat.bl = (1<<(sz-17))-1; ubat.vs = 1; ubat.vp = 0;
+    lbat.brpn = 0; lbat.w = lbat.i = lbat.m = lbat.g = 0; lbat.pp = 2;
+	/* Retrieve current MSR */
+	asm volatile("mfmsr %0":"=r"(msr));
+	/* Now do the real work */
+	asm volatile(
+		"	mtmsr     %0 \n"	/* interrupts and MMU off */
+		"	isync        \n"
+		"	mtdbatu 0,%1 \n"
+		"	mtdbatl 0,%2 \n"
+		"	mtibatu 0,%1 \n"
+		"	mtibatl 0,%2 \n"
+		"	isync        \n"
+		::"r"(msr & ~(MSR_EE | MSR_IR | MSR_DR)),
+          "r"(ubat),
+          "r"(lbat));
+	/* MMU and interrupts back on */
+	asm volatile(
+		"	mtmsr %0     \n"
+		"	isync        \n"
+		::"r"(msr));
+  }
 
   reg = *SYN_VGM_REG_STAT_BOARD;
   switch (reg & SYN_VGM_REG_STAT_CPU_BUS_SPEED_MSK) {
@@ -388,6 +446,7 @@ void bsp_start( void )
 		  case SYN_VGM_REG_STAT_CPU_BUS_SPEED_133:
 				BSP_bus_frequency = 133333333; break;
   } 
+
   BSP_processor_frequency	= BSP_getCpuClock(BSP_bus_frequency);
   BSP_time_base_divisor		= 4000; /* 750 and 7400 clock the TB / DECR at 1/4 of the CPU speed */
   BSPBaseBaud				= 9600*156; /* TODO, found by experiment */
