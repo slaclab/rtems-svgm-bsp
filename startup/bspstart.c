@@ -56,7 +56,7 @@
  * system init stack and soft ir stack size
  */
 #define INIT_STACK_SIZE 0x1000
-#define INTR_STACK_SIZE CONFIGURE_INTERRUPT_STACK_MEMORY
+#define INTR_STACK_SIZE rtems_configuration_get_interrupt_stack_size()
 
 
 #define USE_BOOTP_STUFF
@@ -131,6 +131,7 @@ extern unsigned __rtems_end[];	/* linker script; declared as an array so it is n
 /*
  * Vital Board data obtained from VGM board registers
  */
+uint32_t bsp_clicks_per_usec;
 /*
  * Total memory
  */
@@ -174,8 +175,6 @@ extern rtems_configuration_table Configuration;
 
 rtems_configuration_table  BSP_Configuration;
 
-rtems_cpu_table Cpu_table;
-
 char *rtems_progname;
 
 /*
@@ -187,6 +186,7 @@ void			bsp_postdriver_hook(void);
 Triv121PgTbl	BSP_pgtbl_setup(unsigned int*);
 void			BSP_pgtbl_activate(Triv121PgTbl);
 
+#if 0
 /* bsp_postdriver_hook() opens the console for stdio;
  * we also want 'special' BREAK processing, so we can
  * reset the board by sending a BREAK to the console...
@@ -201,6 +201,7 @@ BSP_UartBreakCbRec cb;
 	cb.private = 0;
 	ioctl(0,BIOCSETBREAKCB,&cb);
 }
+#endif
 
 
 /*
@@ -325,7 +326,6 @@ void bsp_start( void )
   /*
    * Initialize default raw exception handlers. See vectors/vectors_init.c
    */
-  Cpu_table.exceptions_in_RAM 	 = TRUE;
   initialize_exceptions();
 
   if (!(chpt=BSP_boardType())) {
@@ -478,18 +478,8 @@ void bsp_start( void )
    */
   pt = BSP_pgtbl_setup(&BSP_mem_size);
 
-  /*
-   * Set up our hooks
-   * Make sure libc_init is done before drivers initialized so that
-   * they can use atexit()
-   */
-
-  Cpu_table.pretasking_hook 	 = bsp_pretasking_hook;    /* init libc, etc. */
-  Cpu_table.postdriver_hook 	 = svgmPostdriverHook;
-  Cpu_table.do_zero_of_workspace = TRUE;
-  Cpu_table.interrupt_stack_size = CONFIGURE_INTERRUPT_STACK_MEMORY;
   /* TB is clocked by PPC bus clock / timebase divisor */
-  Cpu_table.clicks_per_usec 	 = BSP_bus_frequency/(BSP_time_base_divisor * 1000);
+  bsp_clicks_per_usec            = BSP_bus_frequency/(BSP_time_base_divisor * 1000);
 
   /* did they pass a workspace size on the commandline ? */
   {

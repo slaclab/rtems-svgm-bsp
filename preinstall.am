@@ -69,6 +69,10 @@ $(PROJECT_INCLUDE)/bsp/irq.h: irq/irq.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/irq.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/irq.h
 
+$(PROJECT_INCLUDE)/bsp/irq_supp.h: ../shared/irq/irq_supp.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
+	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/irq_supp.h
+PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/irq_supp.h
+
 $(PROJECT_INCLUDE)/bsp/openpic.h: ../../powerpc/shared/openpic/openpic.h $(PROJECT_INCLUDE)/bsp/$(dirstamp)
 	$(INSTALL_DATA) $< $(PROJECT_INCLUDE)/bsp/openpic.h
 PREINSTALL_FILES += $(PROJECT_INCLUDE)/bsp/openpic.h

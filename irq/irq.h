@@ -25,8 +25,6 @@
 #define LIBBSP_POWERPC_SVGM_IRQ_IRQ_H
 
 
-#define BSP_ASM_IRQ_VECTOR_BASE 0x0
-
 #ifndef ASM
 
 #ifdef __cplusplus
@@ -50,8 +48,6 @@ extern "C" {
  */
 
 typedef enum {
-  /* Base vector for our ISA IRQ handlers. */
-  BSP_ISA_IRQ_VECTOR_BASE	=	BSP_ASM_IRQ_VECTOR_BASE,
   /*
    * ISA IRQ handler related definitions
    */
@@ -125,11 +121,9 @@ static inline int BSP_irq_enabled_at_i8259s(irqLine)	{ return 0; }
  * PIC-independent function to enable/disable interrupt lines at
  * the pic.
  */
-extern void BSP_enable_irq_at_pic		(const rtems_irq_number irqLine);
-extern void BSP_disable_irq_at_pic		(const rtems_irq_number irqLine);
-
-extern int BSP_setup_the_pic			(rtems_irq_global_settings* config);
 extern void BSP_rtems_irq_mng_init(unsigned cpuId);
+
+#include <bsp/irq_supp.h>
 
 #ifdef __cplusplus
 };

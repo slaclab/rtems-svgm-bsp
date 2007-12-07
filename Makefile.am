@@ -59,12 +59,14 @@ startup_rel_SOURCES = startup/bspstart.c \
     ../../powerpc/shared/startup/panic.c \
     ../../powerpc/shared/startup/probeMemEnd.c \
     ../../powerpc/shared/startup/pretaskinghook.c \
+    ../../shared/bsppredriverhook.c \
     ../../powerpc/shared/startup/zerobss.c \
     ../../powerpc/shared/startup/pgtbl_setup.c \
     ../../powerpc/shared/startup/pgtbl_activate.c \
     ../../powerpc/shared/startup/sbrk.c ../../shared/bootcard.c \
     ../../shared/bsplibc.c ../../shared/bsppost.c \
-    ../../shared/main.c ../../shared/gnatinstallhandler.c
+    ../../shared/gnatinstallhandler.c
+#startup_rel_SOURCES+=../../shared/main.c
 startup_rel_CPPFLAGS = $(AM_CPPFLAGS)
 startup_rel_LDFLAGS = $(RTEMS_RELLDFLAGS)
 
@@ -88,7 +90,7 @@ console_rel_CPPFLAGS = $(AM_CPPFLAGS) $(console_CPPFLAGS)
 console_rel_LDFLAGS = $(RTEMS_RELLDFLAGS)
 
 #irq
-include_bsp_HEADERS += irq/irq.h
+include_bsp_HEADERS += irq/irq.h ../shared/irq/irq_supp.h
 
 noinst_PROGRAMS += irq.rel
 irq_rel_SOURCES = irq/irq_init.c \
@@ -125,8 +127,8 @@ include_bsp_HEADERS += ./vectors/ssrl/bspException.h
 
 noinst_PROGRAMS += vectors.rel
 vectors_rel_SOURCES = \
-    ../../powerpc/shared/vectors/vectors_init.c \
-    ../../powerpc/shared/vectors/vectors.S \
+	../shared/vectors/vectors.S \
+	../shared/vectors/vectors_init.c \
     ./vectors/ssrl/exceptionhandler.c \
     ./vectors/machinecheckclear.c
 vectors_rel_CPPFLAGS = $(AM_CPPFLAGS)
@@ -176,10 +178,11 @@ libbsp_a_LIBADD = startup.rel pclock.rel console.rel irq.rel \
 libbsp_a_LIBADD += ../../../libcpu/@RTEMS_CPU@/shared/cpuIdent.rel \
     ../../../libcpu/@RTEMS_CPU@/shared/stack.rel \
     ../../../libcpu/@RTEMS_CPU@/@exceptions@/rtems-cpu.rel \
+    ../../../libcpu/@RTEMS_CPU@/@exceptions@/raw_exception.rel \
     ../../../libcpu/@RTEMS_CPU@/mpc6xx/clock.rel \
-    ../../../libcpu/@RTEMS_CPU@/mpc6xx/exceptions.rel \
     ../../../libcpu/@RTEMS_CPU@/mpc6xx/mmu.rel \
     ../../../libcpu/@RTEMS_CPU@/mpc6xx/timer.rel
+
 
 all-local: $(PREINSTALL_FILES) $(TMPINSTALL_FILES)
 

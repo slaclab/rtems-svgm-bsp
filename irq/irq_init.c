@@ -102,7 +102,7 @@ void BSP_rtems_irq_mng_init(unsigned cpuId)
   printk("Going to initialize interrupt controller (openpic compliant)\n");
 #endif       
   /* use default polarity (0) and senses (1==level) */
-  openpic_init(1,0,0);
+  openpic_init(1,0,0,0,0,0);
 
 #ifdef TRACE_IRQ_INIT  
   printk("Going to re-initialize the rtemsIrq table\n");
@@ -123,7 +123,7 @@ void BSP_rtems_irq_mng_init(unsigned cpuId)
     initial_config.irqNb 	= BSP_IRQ_NUMBER;
     initial_config.defaultEntry = defaultIrq;
     initial_config.irqHdlTbl	= rtemsIrq;
-    initial_config.irqBase	= BSP_ASM_IRQ_VECTOR_BASE;
+    initial_config.irqBase	= BSP_LOWEST_OFFSET;
     initial_config.irqPrioTbl	= irqPrioTable;
 
 #ifdef TRACE_IRQ_INIT  
