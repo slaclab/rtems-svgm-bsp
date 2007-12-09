@@ -1,3 +1,8 @@
+2007-12-08	Till Straumann <strauman@slac.stanford.edu>
+
+	* vme/VMEConfig.h: added error status to
+	BSP_VME_UNIVERSE_INSTALL_IRQ_MGR(err) macro.
+
 2007-11-30	Till Straumann <strauman@slac.stanford.edu>
 
 	* startup/bspstart: removed _Cpu_table.exceptions_in_RAM.
