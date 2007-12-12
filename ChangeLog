@@ -1,5 +1,10 @@
 2007-12-11	Till Straumann <strauman@slac.stanford.edu>
 
+	* startup/bspstart.c: eliminated BSP_Configuration;
+	must set workspace start in std. Configuration table.
+
+2007-12-11	Till Straumann <strauman@slac.stanford.edu>
+
 	* Makefile.am: use new irq_bspsupport.rel which was
 	split out of exc_bspsupport.rel to provide finer-grained
 	control over what BSPs want to use.

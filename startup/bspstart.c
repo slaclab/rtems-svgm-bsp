@@ -60,7 +60,7 @@
 
 
 #define USE_BOOTP_STUFF
-#undef   SHOW_MORE_INIT_SETTINGS
+#define   SHOW_MORE_INIT_SETTINGS
 
 
 #define CMDLINE_BUF_SIZE	2048
@@ -172,8 +172,6 @@ BSP_set_DABR(void *addr, int flags)
  */
 
 extern rtems_configuration_table Configuration;
-
-rtems_configuration_table  BSP_Configuration;
 
 char *rtems_progname;
 
@@ -292,7 +290,7 @@ void bsp_start( void )
 
   /* fill stack with pattern for debugging */
   __asm__ __volatile__("mr %0, %%r1":"=r"(r1sp));
-  while (--r1sp >= __rtems_end)
+  while (--r1sp > __rtems_end)
 	  *r1sp=0xeeeeeeee;
 
   /*
@@ -493,19 +491,19 @@ void bsp_start( void )
   }
   if ( size ) {
     printk("Allocating %i bytes of workspace as requested from cmdline\n", size);
-    Configuration.work_space_size = BSP_Configuration.work_space_size = size;
+    Configuration.work_space_size =  size;
   }
   }
 
   work_space_start = 
-    (unsigned char *)BSP_mem_size - BSP_Configuration.work_space_size;
+    (unsigned char *)BSP_mem_size - rtems_configuration_get_work_space_size();
 
   if ( work_space_start <= ((unsigned char *)__rtems_end) + INIT_STACK_SIZE + INTR_STACK_SIZE) {
     printk( "bspstart: Not enough RAM!!!\n" );
     bsp_cleanup();
   }
 
-  BSP_Configuration.work_space_start = work_space_start;
+  Configuration.work_space_start = work_space_start;
 
   /*
    * Initalize RTEMS IRQ system (including the openPIC)
