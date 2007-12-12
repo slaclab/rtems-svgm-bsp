@@ -1,3 +1,9 @@
+2007-12-11	Till Straumann <strauman@slac.stanford.edu>
+
+	* Makefile.am: use new irq_bspsupport.rel which was
+	split out of exc_bspsupport.rel to provide finer-grained
+	control over what BSPs want to use.
+
 2007-12-08	Till Straumann <strauman@slac.stanford.edu>
 
 	* Makefile.am: merged shared/vme/vme_universe.c and

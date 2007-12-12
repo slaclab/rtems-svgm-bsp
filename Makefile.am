@@ -36,11 +36,16 @@ project_lib_DATA += rtems_crti.$(OBJEXT)
 EXTRA_DIST += ../../powerpc/shared/start/start.S
 start.$(OBJEXT): ../../powerpc/shared/start/start.S
 	$(CPPASCOMPILE) -DASM -o $@ -c $<
-EXTRA_DIST += ./start/ssrl/preload.S
-preload.$(OBJEXT): ./start/ssrl/preload.S
+
+EXTRA_DIST += ../shared/start/preload.S
+preload.$(OBJEXT): ../shared/start/preload.S
 	$(CPPASCOMPILE) -DASM -o $@ -c $<
 
-svgmstart.$(OBJEXT):	preload.$(OBJEXT) start.$(OBJEXT)
+EXTRA_DIST += ../shared/start/vectors_entry.S
+vectors_entry.$(OBJEXT): ../shared/start/vectors_entry.S
+	$(CPPASCOMPILE) -DASM -o $@ -c $<
+
+svgmstart.$(OBJEXT):	preload.$(OBJEXT) vectors_entry.$(OBJEXT) start.$(OBJEXT)
 	$(LD) -o $@ -r $^
 
 project_lib_DATA += svgmstart.$(OBJEXT)
@@ -91,13 +96,13 @@ console_rel_LDFLAGS = $(RTEMS_RELLDFLAGS)
 
 #irq
 include_bsp_HEADERS += irq/irq.h \
-	../../../libcpu/@RTEMS_CPU@/@exceptions@/bspsupport/irq_supp.h
+	../../../libcpu/@RTEMS_CPU@/@exceptions@/bspsupport/vectors.h \
+	../../../libcpu/@RTEMS_CPU@/@exceptions@/bspsupport/irq_supp.h \
+	../../../libcpu/@RTEMS_CPU@/@exceptions@/bspsupport/ppc_exc_bspsupp.h
 
 noinst_PROGRAMS += irq.rel
 irq_rel_SOURCES = irq/irq_init.c \
-    ../../powerpc/shared/irq/openpic_i8259_irq.c \
-    ../../powerpc/shared/irq/irq.c \
-    ../../powerpc/shared/irq/irq_asm.S
+    ../../powerpc/shared/irq/openpic_i8259_irq.c
 irq_rel_CPPFLAGS = $(AM_CPPFLAGS)
 irq_rel_LDFLAGS = $(RTEMS_RELLDFLAGS)
 
@@ -123,13 +128,10 @@ pci_rel_CPPFLAGS = $(AM_CPPFLAGS)
 pci_rel_LDFLAGS = $(RTEMS_RELLDFLAGS)
 
 #vectors
-include_bsp_HEADERS += ../../powerpc/shared/vectors/vectors.h
 include_bsp_HEADERS += ./vectors/ssrl/bspException.h
 
 noinst_PROGRAMS += vectors.rel
 vectors_rel_SOURCES = \
-	../shared/vectors/vectors.S \
-	../shared/vectors/vectors_init.c \
     ./vectors/ssrl/exceptionhandler.c \
     ./vectors/machinecheckclear.c
 vectors_rel_CPPFLAGS = $(AM_CPPFLAGS)
@@ -179,6 +181,8 @@ libbsp_a_LIBADD += ../../../libcpu/@RTEMS_CPU@/shared/cpuIdent.rel \
     ../../../libcpu/@RTEMS_CPU@/shared/stack.rel \
     ../../../libcpu/@RTEMS_CPU@/@exceptions@/rtems-cpu.rel \
     ../../../libcpu/@RTEMS_CPU@/@exceptions@/raw_exception.rel \
+    ../../../libcpu/@RTEMS_CPU@/@exceptions@/exc_bspsupport.rel \
+    ../../../libcpu/@RTEMS_CPU@/@exceptions@/irq_bspsupport.rel \
     ../../../libcpu/@RTEMS_CPU@/mpc6xx/clock.rel \
     ../../../libcpu/@RTEMS_CPU@/mpc6xx/mmu.rel \
     ../../../libcpu/@RTEMS_CPU@/mpc6xx/timer.rel
