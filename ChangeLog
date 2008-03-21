@@ -1,3 +1,9 @@
+2008-03-20	Till Straumann <strauman@slac.stanford.edu>
+
+	* include/bsp.h: confdefs.h now wants us to use
+	BSP_INTERRUPT_STACK_SIZE instead of
+	CONFIGURE_INTERRUPT_STACK_MEMORY.
+
 2007-12-11	Till Straumann <strauman@slac.stanford.edu>
 
 	* startup/bspstart.c: eliminated BSP_Configuration;
