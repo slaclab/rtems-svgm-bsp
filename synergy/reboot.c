@@ -2,6 +2,7 @@
 
 /* VGM implementation of reboot */
 
+#include <stdio.h>
 #include <bsp/vmeUniverse.h>
 #include <rtems/bspIo.h>
 #include <libcpu/stackTrace.h>

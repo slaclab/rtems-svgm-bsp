@@ -119,8 +119,6 @@ BSP_output_char_function_type BSP_output_char = BSP_output_char_via_serial;
 
 SPR_RW(DABR)
 SPR_RW(HID0)
-SPR_RW(SPRG0)
-SPR_RW(SPRG1)
 
 extern void		L1_caches_enables();
 extern unsigned get_L2CR();
@@ -213,7 +211,8 @@ void bsp_start( void )
   unsigned char				*stack;
   unsigned 					*r1sp;
   unsigned					l2cr;
-  unsigned					intrStack;
+  uint32_t					intrStackStart;
+  uint32_t                  intrStackSize;
   unsigned char				*work_space_start;
   ppc_cpu_id_t				myCpu;
   ppc_cpu_revision_t		myCpuRevision;
@@ -300,31 +299,15 @@ void bsp_start( void )
    * This could be done latter (e.g in IRQ_INIT) but it helps to understand
    * some settings below...
    */
-  BSP_heap_start = ((unsigned) __rtems_end) + INIT_STACK_SIZE + INTR_STACK_SIZE;
+  intrStackStart = ((uint32_t) __rtems_end) + INIT_STACK_SIZE;
+  intrStackSize  = rtems_configuration_get_interrupt_stack_size();
+  BSP_heap_start = intrStackStart + intrStackSize;
 
-  /* reserve space for the marker/tag frame */
-  intrStack      = BSP_heap_start - PPC_MINIMUM_STACK_FRAME_SIZE;
-
-  /* make sure it's properly aligned */
-  intrStack &= ~(CPU_STACK_ALIGNMENT-1);
-
-  /* tag the bottom (T. Straumann 6/36/2001 <strauman@slac.stanford.edu>) */
-  r1sp  =(unsigned*)intrStack;
-  *r1sp = 0;
-
-  /* fill interrupt stack with pattern for debugging */
-  while (--r1sp >= (unsigned*)( intrStack - (INTR_STACK_SIZE - 16)))
-	  *r1sp=0xeeeeeeee;
-
-  _write_SPRG1(intrStack);
-
-  /* signal them that we have fixed PR288 - eventually, this should go away */
-  _write_SPRG0(PPC_BSP_HAS_FIXED_PR288);
-
-  /*
-   * Initialize default raw exception handlers. See vectors/vectors_init.c
-   */
-  initialize_exceptions();
+  ppc_exc_initialize(
+  	PPC_INTERRUPT_DISABLE_MASK_DEFAULT,
+	intrStackStart,
+	intrStackSize
+  );
 
   if (!(chpt=BSP_boardType())) {
 		  BSP_panic("Unknown Synergy Board Type");
@@ -340,7 +323,7 @@ void bsp_start( void )
   printk("Initial system stack at 0x%08x\n",stack);
   __asm__ __volatile__ ("mr %0, %%r1":"=r"(stack));
   printk("(R1 stack pointer is    0x%08x)\n", stack);
-  printk("Software IRQ stack at   0x%08x\n",intrStack);
+  printk("Software IRQ stack at   0x%08x\n",intrStackStart);
   printk("Initial L2CR value is   0x%08x\n", l2cr);
   printk("-----------------------------------------\n");
 #endif
