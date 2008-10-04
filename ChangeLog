@@ -1,3 +1,14 @@
+2008-10-04	Till Straumann <strauman@slac.stanford.edu>
+
+	* svgm.cfg: updated to 4.9; removed make-exe
+	make-cxx-exe commands. Replaced CPU cflags to use
+	-mpowerpc -D__ppc_generic.
+
+2008-10-04	Till Straumann <strauman@slac.stanford.edu>
+
+	* startup/linkcmds: increased size of CODE memory
+	area to 32M.
+
 2008-03-20	Till Straumann <strauman@slac.stanford.edu>
 
 	* include/bsp.h: confdefs.h now wants us to use
