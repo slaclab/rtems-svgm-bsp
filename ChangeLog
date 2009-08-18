@@ -1,3 +1,8 @@
+2009-08-18	Till Straumann <strauman@slac.stanford.edu>
+
+	* include/bsp.h, startup/bspclean.c, startup/bspstart.c,
+	synergy/reboot.c: renamed rtemsReboot() -> bsp_reset().
+
 2008-10-04	Till Straumann <strauman@slac.stanford.edu>
 
 	* svgm.cfg: updated to 4.9; removed make-exe

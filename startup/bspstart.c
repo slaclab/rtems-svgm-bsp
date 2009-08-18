@@ -193,7 +193,7 @@ BSP_UartBreakCbRec cb;
 	/* do standard init (open console) */
 	bsp_postdriver_hook();
 	/* stdin should be fd 0 now */
-	cb.handler = (BSP_UartBreakCbProc)rtemsReboot;
+	cb.handler = (BSP_UartBreakCbProc)bsp_reset;
 	cb.private = 0;
 	ioctl(0,BIOCSETBREAKCB,&cb);
 }

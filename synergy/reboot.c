@@ -20,7 +20,7 @@
 void (*__BSP_alternate_reset)(void)=0;
 
 void
-rtemsReboot(void)
+bsp_reset(void)
 {
 	printk("Printing a stack trace for your convenience :-)\n");
 	CPU_print_stack();

@@ -119,7 +119,7 @@ extern char *BSP_commandline_string;
 
 extern rtems_configuration_table  BSP_Configuration;
 extern void BSP_panic(char *s);
-extern void rtemsReboot(void);
+extern void bsp_reset(void);
 extern int BSP_disconnect_clock_handler (void);
 extern int BSP_connect_clock_handler (void);
 
