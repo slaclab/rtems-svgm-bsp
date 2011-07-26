@@ -1,3 +1,8 @@
+2011-07-26	Till Straumann <strauman@slac.stanford.edu>
+
+	* svgm.cfg, make/custom/svgm.cfg: moved svgm.cfg to
+	make/custom/.
+
 2009-08-18	Till Straumann <strauman@slac.stanford.edu>
 
 	* include/bsp.h, startup/bspclean.c, startup/bspstart.c,
