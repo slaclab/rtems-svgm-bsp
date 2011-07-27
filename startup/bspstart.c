@@ -52,16 +52,7 @@
 #undef __RTEMS_APPLICATION__
 #endif
 
-/*
- * system init stack and soft ir stack size
- */
-#define INIT_STACK_SIZE 0x1000
-#define INTR_STACK_SIZE rtems_configuration_get_interrupt_stack_size()
-
-
-#define USE_BOOTP_STUFF
 #define   SHOW_MORE_INIT_SETTINGS
-
 
 #define CMDLINE_BUF_SIZE	2048
 
@@ -290,7 +281,7 @@ void bsp_start( void )
    * This could be done latter (e.g in IRQ_INIT) but it helps to understand
    * some settings below...
    */
-  intrStackStart = ((uint32_t) __rtems_end) + INIT_STACK_SIZE;
+  intrStackStart = (uint32_t) __rtems_end;
   intrStackSize  = rtems_configuration_get_interrupt_stack_size();
   BSP_heap_start = intrStackStart + intrStackSize;
 
