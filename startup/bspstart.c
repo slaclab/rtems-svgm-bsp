@@ -71,7 +71,7 @@ char *BSP_commandline_string = cmdline_buf;
 /* this routine is called early and must be safe with a not properly
  * aligned stack
  */
-void
+char *
 save_boot_params(void *r3, void *r4, void* r5, char *cmdline_start, char *cmdline_end)
 {
 int             i=cmdline_end-cmdline_start;
@@ -81,15 +81,13 @@ int             i=cmdline_end-cmdline_start;
 		i = 0;
         memmove(cmdline_buf, cmdline_start, i);
 	cmdline_buf[i]=0;
+	return cmdline_buf;
 }
 
 
 /* a couple of declarations we have no header for :-( */
 void
-_BSP_pciCacheInit();
-
-void
-_BSP_pciIRouteFixup();
+_BSP_pciIRouteFixup(void);
 
 void
 bsp_pretasking_hook(void);
@@ -120,8 +118,8 @@ BSP_output_char_function_type BSP_output_char = BSP_output_char_via_serial;
 SPR_RW(DABR)
 SPR_RW(HID0)
 
-extern void		L1_caches_enables();
-extern unsigned get_L2CR();
+extern void		L1_caches_enables(void);
+extern unsigned get_L2CR(void);
 extern unsigned set_L2CR(unsigned);
 extern void		bsp_cleanup(void);
 extern unsigned __rtems_end[];	/* linker script; declared as an array so it is not assumed to be in short data area */
@@ -209,11 +207,9 @@ BSP_UartBreakCbRec cb;
 void bsp_start( void )
 {
   unsigned char				*stack;
-  unsigned 					*r1sp;
   unsigned					l2cr;
   uint32_t					intrStackStart;
   uint32_t                  intrStackSize;
-  unsigned char				*work_space_start;
   ppc_cpu_id_t				myCpu;
   ppc_cpu_revision_t		myCpuRevision;
   unsigned char				reg;
@@ -282,15 +278,10 @@ void bsp_start( void )
    * so there is no need to set it in r1 again... It is just for info
    * so that It can be printed without accessing R1.
    */
-  stack = ((unsigned char*) __rtems_end) + INIT_STACK_SIZE - PPC_MINIMUM_STACK_FRAME_SIZE;
+  asm volatile("mr %0, 1":"=r"(stack));
 
   /* tag the bottom, so a stack trace utility may know when to stop */
   *((uint32_t *)stack) = 0;
-
-  /* fill stack with pattern for debugging */
-  __asm__ __volatile__("mr %0, %%r1":"=r"(r1sp));
-  while (--r1sp > __rtems_end)
-	  *r1sp=0xeeeeeeee;
 
   /*
    * Initialize the interrupt related settings
@@ -321,8 +312,6 @@ void bsp_start( void )
   printk("-----------------------------------------\n");
 #ifdef SHOW_MORE_INIT_SETTINGS  
   printk("Initial system stack at 0x%08x\n",stack);
-  __asm__ __volatile__ ("mr %0, %%r1":"=r"(stack));
-  printk("(R1 stack pointer is    0x%08x)\n", stack);
   printk("Software IRQ stack at   0x%08x\n",intrStackStart);
   printk("Initial L2CR value is   0x%08x\n", l2cr);
   printk("-----------------------------------------\n");
@@ -347,10 +336,6 @@ void bsp_start( void )
   /* Install our own exception handler (needs PCI) */
   globalExceptHdl = BSP_exceptionHandler;
 
-#if 0
-  /* now build the pci device cache which supports BSP_pciFindDevice() */
-  _BSP_pciCacheInit();
-#endif
   /* read board info registers */
   reg = *SYN_VGM_REG_INFO_MEMORY;
   BSP_mem_size =  
@@ -477,16 +462,6 @@ void bsp_start( void )
     Configuration.work_space_size =  size;
   }
   }
-
-  work_space_start = 
-    (unsigned char *)BSP_mem_size - rtems_configuration_get_work_space_size();
-
-  if ( work_space_start <= ((unsigned char *)__rtems_end) + INIT_STACK_SIZE + INTR_STACK_SIZE) {
-    printk( "bspstart: Not enough RAM!!!\n" );
-    bsp_cleanup();
-  }
-
-  Configuration.work_space_start = work_space_start;
 
   /*
    * Initalize RTEMS IRQ system (including the openPIC)

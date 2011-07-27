@@ -14,8 +14,8 @@ void
 BSP_machineCheckClearException(BSP_Exception_frame *excPtr, int quiet)
 {
 	if (excPtr->EXC_SRR1 & (SRR1_MCP_EXC)) {
-		unsigned char c1,c2;
-		unsigned int  l;
+		uint8_t  c1,c2;
+		uint32_t l;
 		unsigned long gerr;
 
 		/* it's MCP; gather info from the host bridge */

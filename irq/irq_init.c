@@ -14,13 +14,13 @@
  *
  *  $Id$
  */
+#include <rtems.h>
+#include <bsp.h>
 #include <libcpu/io.h>
 #include <libcpu/spr.h>
 #include <bsp/pci.h>
 #include <bsp/openpic.h>
 #include <bsp/irq.h>
-#include <bsp.h>
-#include <libcpu/raw_exception.h>
 
 /*
 #define SHOW_ISA_PCI_BRIDGE_SETTINGS
@@ -31,11 +31,8 @@
 /*
  * default on/off function
  */
-static void nop_func(){}
-/*
- * default isOn function
- */
-static int not_connected() {return 0;}
+static void nop_func(void *unused){}
+
 /*
  * default possible isOn function
 static int connected() {return 1;}
@@ -45,7 +42,7 @@ static rtems_irq_connect_data     	rtemsIrq[BSP_IRQ_NUMBER];
 static rtems_irq_global_settings     	initial_config;
 static rtems_irq_connect_data     	defaultIrq = {
   /* vectorIdex,	 hdl		, handle	, on		, off		, isOn */
-  0, 			 nop_func	, NULL		, nop_func	, nop_func	, not_connected
+              0,        nop_func,       NULL,  0        , 0         ,     0
 };
 static rtems_irq_prio irqPrioTable[BSP_IRQ_NUMBER]={
   /*

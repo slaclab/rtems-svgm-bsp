@@ -81,10 +81,10 @@ unsigned long
 _BSP_clear_hostbridge_errors(int enableMCP, int quiet)
 {
 unsigned long	rval, status;
-unsigned int	picr1;
-unsigned char	errenR1,errdr1,errdr2;
-unsigned short	pcistat,pcistat_orig;
-int				count;
+uint32_t picr1;
+uint8_t  errenR1,errdr1,errdr2;
+uint16_t pcistat,pcistat_orig;
+int      count;
 	/* disable MCP interrupt generation PICR1[MCP_EN]=0 */
 	pci_read_config_dword(0,0,0,PICR1,  &picr1);
 	pci_write_config_dword(0,0,0,PICR1, picr1 & ~(PICR1_MCP_EN|PICR1_TEA_EN));
@@ -167,9 +167,9 @@ int				count;
 	return rval & ~PCI_STATUS_FAST_BTB;
 }
 
-void detect_host_bridge()
+void detect_host_bridge(void)
 {
-  unsigned int id0;
+  uint32_t id0;
 
   /* setup the correct address configuration */
   BSP_pci_configuration.pci_config_addr = (void*)_GRACKLE_PCI_CONFIG_ADDR;

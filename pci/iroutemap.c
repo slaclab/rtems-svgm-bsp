@@ -45,7 +45,7 @@ static struct _int_map iroutemap[] = {
 };
 
 void
-_BSP_pciIRouteFixup()
+_BSP_pciIRouteFixup(void)
 {
 	FixupPCI(iroutemap, pci_swizzle);
 }

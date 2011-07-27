@@ -47,62 +47,61 @@ extern "C" {
  * which is included in openpic.c _after_ openpic.h
  */
 
-typedef enum {
   /*
    * ISA IRQ handler related definitions
    */
-  BSP_ISA_IRQ_NUMBER    	= 	0, /* SVGM has no ISA PIC */
-  BSP_ISA_IRQ_LOWEST_OFFSET	= 	0,
-  BSP_ISA_IRQ_MAX_OFFSET	= 	BSP_ISA_IRQ_LOWEST_OFFSET + BSP_ISA_IRQ_NUMBER - 1,
+#define  BSP_ISA_IRQ_NUMBER             0  /* SVGM has no ISA PIC */
+#define  BSP_ISA_IRQ_LOWEST_OFFSET      0
+#define  BSP_ISA_IRQ_MAX_OFFSET         (BSP_ISA_IRQ_LOWEST_OFFSET + BSP_ISA_IRQ_NUMBER - 1)
   /*
    * PCI IRQ handlers related definitions
    * CAUTION : BSP_PCI_IRQ_LOWEST_OFFSET should be equal to OPENPIC_VEC_SOURCE
    */
-  BSP_PCI_IRQ_NUMBER		=	16,
-  BSP_PCI_IRQ_LOWEST_OFFSET	=	16, /* _MUST_ be the same as OPENPIC_VEC_SOURCE */
-  BSP_PCI_IRQ_MAX_OFFSET	= 	BSP_PCI_IRQ_LOWEST_OFFSET + BSP_PCI_IRQ_NUMBER - 1,
+#define  BSP_PCI_IRQ_NUMBER             16
+#define  BSP_PCI_IRQ_LOWEST_OFFSET      16 /* _MUST_ be the same as OPENPIC_VEC_SOURCE */
+#define  BSP_PCI_IRQ_MAX_OFFSET         (BSP_PCI_IRQ_LOWEST_OFFSET + BSP_PCI_IRQ_NUMBER - 1)
   /*
    * PowerPc exceptions handled as interrupt where a rtems managed interrupt
    * handler might be connected
    */
-  BSP_PROCESSOR_IRQ_NUMBER	=	1,
-  BSP_PROCESSOR_IRQ_LOWEST_OFFSET = 	BSP_PCI_IRQ_MAX_OFFSET + 1,
-  BSP_PROCESSOR_IRQ_MAX_OFFSET	=	BSP_PROCESSOR_IRQ_LOWEST_OFFSET + BSP_PROCESSOR_IRQ_NUMBER - 1,
+#define  BSP_PROCESSOR_IRQ_NUMBER        1
+#define  BSP_PROCESSOR_IRQ_LOWEST_OFFSET (BSP_PCI_IRQ_MAX_OFFSET + 1)
+#define  BSP_PROCESSOR_IRQ_MAX_OFFSET    (BSP_PROCESSOR_IRQ_LOWEST_OFFSET + BSP_PROCESSOR_IRQ_NUMBER - 1)
 
   /* allow a couple of vectors for VME and timer irq sources etc. */
-  BSP_MISC_IRQ_NUMBER		=	30,
-  BSP_MISC_IRQ_LOWEST_OFFSET	=	BSP_PROCESSOR_IRQ_MAX_OFFSET + 1,
-  BSP_MISC_IRQ_MAX_OFFSET	=	BSP_MISC_IRQ_LOWEST_OFFSET + BSP_MISC_IRQ_NUMBER - 1,
+#define  BSP_MISC_IRQ_NUMBER            30
+#define  BSP_MISC_IRQ_LOWEST_OFFSET     (BSP_PROCESSOR_IRQ_MAX_OFFSET + 1)
+#define  BSP_MISC_IRQ_MAX_OFFSET        (BSP_MISC_IRQ_LOWEST_OFFSET + BSP_MISC_IRQ_NUMBER - 1)
 
   /*
    * Summary
    */
-  BSP_IRQ_NUMBER		= 	BSP_MISC_IRQ_MAX_OFFSET + 1,
-  BSP_LOWEST_OFFSET		=	BSP_ISA_IRQ_LOWEST_OFFSET,
-  BSP_MAX_OFFSET		=	BSP_MISC_IRQ_MAX_OFFSET,
+#define  BSP_IRQ_NUMBER     (BSP_MISC_IRQ_MAX_OFFSET + 1)
+#define  BSP_LOWEST_OFFSET  (BSP_ISA_IRQ_LOWEST_OFFSET)
+#define  BSP_MAX_OFFSET	    (BSP_MISC_IRQ_MAX_OFFSET)
     /*
      * Some ISA IRQ symbolic name definition
      */	       
 
   /* on the SVGM these are actually PCI irqs */
-  BSP_UART_COM2_IRQ		=	BSP_PCI_IRQ_LOWEST_OFFSET + 14,
+#define  BSP_UART_COM2_IRQ  (BSP_PCI_IRQ_LOWEST_OFFSET + 14)
 
-  BSP_UART_COM1_IRQ		=	BSP_PCI_IRQ_LOWEST_OFFSET + 15,
+#define  BSP_UART_COM1_IRQ  (BSP_PCI_IRQ_LOWEST_OFFSET + 15)
 
     /*
      * Some PCI IRQ symbolic name definition
      */
-  BSP_PCI_IRQ0			=	BSP_PCI_IRQ_LOWEST_OFFSET,
+#define  BSP_PCI_IRQ0               BSP_PCI_IRQ_LOWEST_OFFSET
 
   /* must never detect a ISA irq on the SVGM */
-  BSP_PCI_ISA_BRIDGE_IRQ	=	0xdeadbeef,
+#undef   BSP_PCI_ISA_BRIDGE_IRQ
     /*
      * Some Processor execption handled as rtems IRQ symbolic name definition
      */
-  BSP_DECREMENTER		=	BSP_PROCESSOR_IRQ_LOWEST_OFFSET
-  
-}rtems_irq_symbolic_name;
+#define  BSP_DECREMENTER            BSP_PROCESSOR_IRQ_LOWEST_OFFSET
 
+#if 0
+#warning remove
 /*
  * Type definition for RTEMS managed interrupts
  */
@@ -116,6 +115,7 @@ static inline int BSP_irq_enable_at_i8259s(irqLine)		{ return 0; }
 static inline int BSP_irq_ack_at_i8259s(irqLine)		{ return 0; }
 static inline int BSP_irq_enabled_at_i8259s(irqLine)	{ return 0; }
 #define i8259s_cache (*(rtems_i8259_masks *)(0))
+#endif
 
 /*
  * PIC-independent function to enable/disable interrupt lines at

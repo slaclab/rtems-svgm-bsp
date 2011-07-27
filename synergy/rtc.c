@@ -43,7 +43,7 @@ static M48T201YRegs	svgmRtc = (M48T201YRegs)0xffe9fff0;
 
 #define WDAY_FT			(1<<6)	/* Frequency Test Bit    */
 void
-BSP_rtcOscillatorStart()
+BSP_rtcOscillatorStart(void)
 {
 unsigned flags;
 unsigned char v;
@@ -55,7 +55,7 @@ unsigned char v;
 
 
 void
-BSP_rtcOscillatorStop()
+BSP_rtcOscillatorStop(void)
 {
 unsigned flags;
 unsigned char v;
@@ -202,13 +202,13 @@ unsigned			flags, ctrl;
 }
 
 int
-BSP_rtcBattIsLow()
+BSP_rtcBattIsLow(void)
 {
 	return 0 != (in_8(&svgmRtc->flags) & FLAG_BL);
 }
 
 int
-BSP_rtcOscillatorIsRunning()
+BSP_rtcOscillatorIsRunning(void)
 {
 	return !(in_8(&svgmRtc->seconds) & SECS_STOP);
 }

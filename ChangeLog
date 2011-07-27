@@ -1,5 +1,13 @@
 2011-07-26	Till Straumann <strauman@slac.stanford.edu>
 
+	* Makefile.am, bsp_specs, configure.ac, preinstall.am,
+	irq/irq.h, irq/irq_init.c, pci/detect_grackle_bridge.c,
+	pci/iroutemap.c, startup/bspstart.c, synergy/rtc.c,
+	vectors/machinecheckclear.c, vectors/ssrl/exceptionhandler.c:
+	port to rtems-4.10 (minor API changes).
+
+2011-07-26	Till Straumann <strauman@slac.stanford.edu>
+
 	* svgm.cfg, make/custom/svgm.cfg: moved svgm.cfg to
 	make/custom/.
 

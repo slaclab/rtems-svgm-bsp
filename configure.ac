@@ -2,13 +2,13 @@
 ## 
 ## configure.ac,v 1.9.2.3 2003/08/11 14:37:22 ralf Exp
 
-AC_PREREQ(2.59)
+AC_PREREQ(2.68)
 AC_INIT([rtems-c-src-lib-libbsp-powerpc-svgm],[_RTEMS_VERSION],[rtems-bugs@rtems.com])
 AC_CONFIG_SRCDIR([bsp_specs])
 RTEMS_TOP(../../../../../..)
 
 RTEMS_CANONICAL_TARGET_CPU
-AM_INIT_AUTOMAKE([no-define nostdinc foreign 1.9])
+AM_INIT_AUTOMAKE([no-define nostdinc foreign 1.11.1])
 RTEMS_BSP_CONFIGURE
 
 RTEMS_PROG_CC_FOR_TARGET([-ansi -fasm])
@@ -16,10 +16,6 @@ RTEMS_CANONICALIZE_TOOLS
 RTEMS_PROG_CCAS
 
 RTEMS_CHECK_TOOL([OBJCOPY],[objcopy])
-
-AC_PATH_PROG([AMPOLISH3],[ampolish3],[])
-AM_CONDITIONAL([AMPOLISH3],[test x"$USE_MAINTAINER_MODE" = x"yes" \
-  && test -n "$AMPOLISH3"])
 
 RTEMS_CHECK_NETWORKING
 AM_CONDITIONAL(HAS_NETWORKING,test "$HAS_NETWORKING" = "yes")
@@ -35,6 +31,16 @@ RTEMS_BSPOPTS_HELP([PPC_USE_DATA_CACHE],
  to break the Corelis PowerPC emulator with at least some combinations
  of PowerPC 603e revisions and emulator versions.
  The BSP actually contains the call that enables this.])
+
+RTEMS_BSPOPTS_SET([CONFIGURE_MALLOC_BSP_SUPPORTS_SBRK], [*], [1])
+RTEMS_BSPOPTS_HELP([CONFIGURE_MALLOC_BSP_SUPPORTS_SBRK],
+[If defined then the BSP may reduce the available memory size
+initially. This can be useful for debugging (reduce the core
+size) or dynamic loading (std gcc text offsets/jumps are < +/-32M).
+Note that the policy can still be defined by the application
+(see sbrk.c, BSP_sbrk_policy). By undefining
+CONFIGURE_MALLOC_BSP_SUPPORTS_SBRK this feature is removed
+and a little memory is saved.])
 
 # Explicitly list all Makefiles here
 AC_CONFIG_FILES([Makefile])
