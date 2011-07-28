@@ -1,3 +1,8 @@
+2011-07-27	Till Straumann <strauman@slac.stanford.edu>
+
+	* startup/linkcmds: added changes that have gone
+	into shared/startup/linkcmds.
+
 2011-07-26	Till Straumann <strauman@slac.stanford.edu>
 
 	* Makefile.am, bsp_specs, configure.ac, preinstall.am,

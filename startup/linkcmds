@@ -75,7 +75,7 @@ SECTIONS
 
   .text      :	
   {
-    *(.text)	
+    *(.text*)	
  
     /*
      * Special FreeBSD sysctl sections.
@@ -99,7 +99,7 @@ _SDA2_BASE_ = __SDATA2_START__ + 0x8000;
   .sdata2         : { *(.sdata2) *(.gnu.linkonce.s2.*)  }	> CODE
   .sbss2          : { 
     				PROVIDE (__sbss2_start = .);
-					  *(.sbss2) *(.gnu.linkonce.sb2.*)
+					  *(.sbss2*) *(.gnu.linkonce.sb2.*)
 					  /* avoid empty sdata2/sbss2 area because __eabi wouldn't set up r2
 					   * (IMPORTANT if run-time loading is involved)
 					   */
@@ -180,7 +180,7 @@ _SDA2_BASE_ = __SDATA2_START__ + 0x8000;
      can access them all, and initialized data all before uninitialized, so
      we can shorten the on-disk segment size.  */
 _SDA_BASE_ = __SDATA_START__ + 0x8000;
-  .sdata          : { *(.sdata) *(.gnu.linkonce.s.*) }	> CODE
+  .sdata          : { *(.sdata*) *(.gnu.linkonce.s.*) }	> CODE
   _edata  =  .;
   PROVIDE (edata = .);
 /* END OF THE LOADED IMAGE (parts moved by the preloader) */
@@ -188,7 +188,7 @@ _SDA_BASE_ = __SDATA_START__ + 0x8000;
   .sbss      :
   {
     PROVIDE (__sbss_start = ABSOLUTE(.));
-    *(.sbss)
+    *(.sbss) *(.sbss.*) *(.gnu.linkonce.sb.*)
     *(.scommon)
     *(.dynsbss)
 	/* avoid empty sdata/sbss area because __eabi wouldn't set up r13
@@ -202,7 +202,7 @@ _SDA_BASE_ = __SDATA_START__ + 0x8000;
   {
    PROVIDE (__bss_start = ABSOLUTE(.));
    *(.dynbss)
-   *(.bss)
+   *(.bss*) *(.gnu.linkonce.b.*)
    *(COMMON)
   . = ALIGN(16);
   } > CODE
