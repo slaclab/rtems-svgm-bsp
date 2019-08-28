@@ -1,3 +1,3 @@
 [submodule "vectors/ssrl"]
 	path = vectors/ssrl
-	url = ../ssrl-ppc-bsp-vectors.git/
+	url = ../ssrl-ppc-bsp-vectors.git
